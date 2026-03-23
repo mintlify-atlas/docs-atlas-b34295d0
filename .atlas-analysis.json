@@ -1,0 +1,92 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Archeo-Cluster",
+  "projectDescription": "A Python CLI tool for archaeological image analysis using OpenCV object detection and K-Means clustering to classify and spatially analyze artifact distributions.",
+  "theme": "aspen",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "installation", "quickstart"]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/detect",
+              "cli/cluster",
+              "cli/analyze",
+              "cli/pipeline",
+              "cli/sessions"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": ["configuration/overview", "configuration/yaml-config", "configuration/environment-variables"]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/analysis-pipeline",
+              "guides/color-segmentation",
+              "guides/session-management",
+              "guides/geojson-export"
+            ]
+          },
+          {
+            "group": "Python API",
+            "pages": [
+              "api/overview",
+              "api/detection",
+              "api/clustering",
+              "api/spatial",
+              "api/models"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": ["contributing/development", "contributing/changelog"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Color-based object detection using OpenCV with HSV segmentation and morphological operations",
+    "K-Means clustering with automatic optimal K selection via the elbow method",
+    "Average Nearest Neighbor (ANN) spatial analysis for distribution pattern interpretation",
+    "GeoJSON export for QGIS compatibility",
+    "Session management for centralized storage and retrieval of analysis results",
+    "Full analysis pipeline running detect, cluster, and analyze in a single command",
+    "Python API for programmatic access to all analysis functionality",
+    "Configuration via YAML files or environment variables"
+  ],
+  "publicApiSurface": [
+    "archeo-cluster detect --input-dir <dir> [--color <hex>] [--min-area <n>] [--max-area <n>]",
+    "archeo-cluster cluster --input <csv> [--max-k <n>]",
+    "archeo-cluster analyze --input <csv>",
+    "archeo-cluster pipeline --input-dir <dir> [--color <hex>] [--session <name>]",
+    "archeo-cluster sessions [--list] [--latest]",
+    "ObjectDetector(config: DetectionConfig)",
+    "ObjectDetector.process_directory(input_dir, output_dir) -> BatchDetectionResult",
+    "KMeansAnalyzer(config: ClusteringConfig)",
+    "KMeansAnalyzer.process_features_csv(input_csv, output_dir) -> BatchClusteringResult",
+    "run_spatial_analysis(input_csv, output_dir) -> tuple[DescriptiveStats, list[ANNResult]]",
+    "DetectionConfig(target_color, min_area, max_area, kernel_size)",
+    "ClusteringConfig(max_k, random_state)",
+    "BatchDetectionResult",
+    "BatchClusteringResult",
+    "ContourFeatures",
+    "DetectedObject",
+    "ClusterInfo",
+    "ElbowResult",
+    "PerformanceSummary",
+    "StageMetrics"
+  ]
+}
