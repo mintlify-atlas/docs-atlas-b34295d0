@@ -38,9 +38,13 @@ For each image represented in the input CSV, the command creates a subdirectory 
 ```
 <output-dir>/
 └── <image-name>/
-    ├── <image-name>_clustered.csv   ← features with cluster assignment column
-    ├── elbow_plot.png               ← WCSS vs K curve
-    └── cluster_scatter.png          ← 2-D scatter of cluster assignments
+    ├── <image-name>_clustered.csv     ← features with added cluster column
+    ├── elbow_method.png               ← WCSS vs K curve with elbow marked
+    ├── silhouette_analysis.png        ← silhouette score vs K (when enabled)
+    ├── cluster_distribution.png       ← centroid scatter coloured by cluster
+    ├── morphological_scatter.png      ← area vs circularity scatter by cluster
+    ├── clusters_visualization.png     ← cluster overlays on detection image (if --images-dir set)
+    └── cluster_groups.png             ← bounding rectangles per cluster group (if --images-dir set)
 ```
 
 <Note>

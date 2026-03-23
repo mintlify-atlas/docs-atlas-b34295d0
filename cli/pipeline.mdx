@@ -57,16 +57,32 @@ By default, `pipeline` creates a session and stores all results in a centralized
 
 ```
 <storage>/<session-name>/
-├── features.csv
 ├── metadata.json
-├── detection/          ← annotated images from Step 1
-├── clusters/           ← cluster CSVs and plots from Step 2
+├── detection/
+│   ├── features.csv
+│   └── <image-name>/
+│       ├── 01_hsv.png
+│       ├── 02_mask_initial.png
+│       ├── 03_mask_closed.png
+│       ├── 04_mask_morph_final.png
+│       ├── 05_raw_contours.png
+│       └── 06_filtered_contours_final.png
+├── clustering/
 │   └── <image-name>/
 │       ├── <image-name>_clustered.csv
-│       ├── elbow_plot.png
-│       └── cluster_scatter.png
-└── analysis/           ← ANN plots and stats from Step 3
+│       ├── elbow_method.png
+│       ├── silhouette_analysis.png
+│       ├── cluster_distribution.png
+│       ├── morphological_scatter.png
+│       ├── clusters_visualization.png
+│       └── cluster_groups.png
+└── analysis/
     └── <image-name>/
+        ├── descriptive_stats.csv
+        ├── ann_results.csv
+        ├── ann_results.png
+        ├── spatial_distribution_map.png
+        └── boxplot_*.png
 ```
 
 <Tip>

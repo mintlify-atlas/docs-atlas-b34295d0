@@ -31,9 +31,9 @@ The Average Nearest Neighbor (ANN) index is the ratio of the observed mean neare
 
 | R-index value | Interpretation |
 |---------------|----------------|
-| R < 1 | Clustered — objects are closer together than expected by chance |
-| R ≈ 1 | Random — no significant spatial pattern |
-| R > 1 | Dispersed — objects are more spread out than expected by chance |
+| R < 0.9 | Clustered — objects are closer together than expected by chance |
+| 0.9 ≤ R ≤ 1.1 | Random — no significant spatial pattern |
+| R > 1.1 | Dispersed — objects are more spread out than expected by chance |
 
 The index is computed independently for each cluster group, so you can compare spatial patterns across different artifact types in the same image.
 
@@ -41,9 +41,11 @@ The index is computed independently for each cluster group, so you can compare s
 
 ```
 <output-dir>/
-├── descriptive_stats.csv    ← mean, std, min, max per cluster
-├── ann_results.csv          ← R-index and interpretation per cluster
-└── ann_plot.png             ← spatial scatter with ANN overlay
+├── descriptive_stats.csv        ← mean, std, min, max for area/perimeter per cluster
+├── ann_results.csv              ← R-index and interpretation per cluster
+├── ann_results.png              ← bar chart of R-index values by cluster
+├── spatial_distribution_map.png ← scatter map of objects coloured by cluster
+└── boxplot_<feature>.png        ← one boxplot per morphological feature (area, perimeter, etc.)
 ```
 
 ## Examples

@@ -67,7 +67,7 @@ The `--latest` flag is convenient when chaining commands manually after a `detec
 SESSION=$(./run-cli sessions --latest)
 
 # Pass the session's features CSV directly to cluster
-./run-cli cluster -i "$SESSION/features.csv"
+./run-cli cluster -i "$SESSION/detection/features.csv"
 
 # Then analyze each clustered CSV
 ./run-cli analyze -i "$SESSION/clusters/image01/image01_clustered.csv"

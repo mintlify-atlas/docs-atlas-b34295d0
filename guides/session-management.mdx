@@ -56,20 +56,22 @@ The paths exposed by `SessionPaths` are:
 
 ## Storage location
 
-Sessions are stored in a platform-appropriate user data directory resolved by [`platformdirs`](https://platformdirs.readthedocs.io/). You can override the base directory with the `ARCHEO_DATA_DIR` environment variable:
+Sessions are stored in a centralized directory managed by `StorageManager`. Run the `sessions` command with no flags to see the current storage location:
 
 ```bash
-# Use the default platform data directory
 uv run archeo-cluster sessions
-# Storage location: /home/user/.local/share/archeo-cluster  (Linux example)
+# Storage location: /home/user/.local/share/archeo-cluster  (example)
+```
 
-# Override storage location
+Override the storage location with the `ARCHEO_DATA_DIR` environment variable:
+
+```bash
 export ARCHEO_DATA_DIR=/mnt/fieldwork/archeo-data
 uv run archeo-cluster pipeline --input-dir ./images
 ```
 
 <Note>
-  On macOS the default base directory is `~/Library/Application Support/archeo-cluster`. On Windows it is `%APPDATA%\archeo-cluster`.
+  The `ARCHEO_DATA_DIR` environment variable overrides the default storage base directory. The default location is platform-specific (typically `~/.local/share/archeo-cluster` on Linux).
 </Note>
 
 ---

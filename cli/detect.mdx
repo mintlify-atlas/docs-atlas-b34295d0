@@ -49,8 +49,13 @@ The command produces two categories of output:
 
 | File | Description |
 |------|-------------|
-| `features.csv` | One row per detected object with columns: `image`, `area`, `perimeter`, `centroid_x`, `centroid_y`, `circularity`, `aspect_ratio`, `cluster` |
-| Detection images | A copy of each input image annotated with contour overlays, saved to the detection images directory of the session |
+| `features.csv` | One row per detected object with columns: `image_filename`, `contour_index`, `area`, `perimeter`, `centroid_x`, `centroid_y`, `circularity`, `aspect_ratio`, `solidity`, `extent` |
+| `<image>/01_hsv.png` | HSV-converted source image (saved when `save_intermediate=True`) |
+| `<image>/02_mask_initial.png` | Raw color mask before morphological operations |
+| `<image>/03_mask_closed.png` | Mask after `MORPH_CLOSE` |
+| `<image>/04_mask_morph_final.png` | Mask after `MORPH_OPEN` |
+| `<image>/05_raw_contours.png` | All raw contours before area filtering (red outlines) |
+| `<image>/06_filtered_contours_final.png` | Contours that passed the area filter (green outlines) |
 
 ## Session vs. legacy output mode
 
