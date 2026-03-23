@@ -1,0 +1,267 @@
+---
+title: "Detection API"
+description: "API reference for ObjectDetector and related classes."
+---
+
+The detection module uses OpenCV color-based segmentation in HSV color space to identify archaeological objects in images, followed by morphological cleaning and contour extraction.
+
+```python
+from archeo_cluster.core.detection import ObjectDetector
+from archeo_cluster.models import DetectionConfig
+```
+
+---
+
+## `ObjectDetector`
+
+Detector for archaeological objects using color-based segmentation.
+
+```python
+from dataclasses import dataclass, field
+from archeo_cluster.core.detection import ObjectDetector
+from archeo_cluster.models import DetectionConfig
+
+detector = ObjectDetector(
+    config=DetectionConfig(target_color="#A98876", min_area=50, max_area=5000),
+    save_intermediate=True,
+)
+```
+
+### Constructor
+
+<ParamField path="config" type="DetectionConfig" default="DetectionConfig()">
+  Detection configuration parameters. Controls target color, area filters, morphological kernel, and HSV tolerances.
+</ParamField>
+
+<ParamField path="save_intermediate" type="bool" default="True">
+  When `True`, intermediate processing images (HSV conversion, masks, contours) are stored in each `DetectionResult.processing_steps` dictionary.
+</ParamField>
+
+---
+
+### `detect`
+
+Detect objects in a single in-memory image.
+
+```python
+import cv2
+
+image = cv2.imread("artifact.jpg")
+result = detector.detect(image, image_name="artifact")
+print(f"Found {result.count} objects")
+```
+
+**Parameters**
+
+<ParamField path="image" type="NDArray[Any]" required>
+  Input image in BGR format as a NumPy array.
+</ParamField>
+
+<ParamField path="image_name" type="str" default="image">
+  Name identifier used in logging and stored in the returned `DetectionResult`.
+</ParamField>
+
+**Returns** `DetectionResult`
+
+---
+
+### `detect_from_path`
+
+Detect objects in an image loaded from disk.
+
+```python
+result = detector.detect_from_path("./data/raw/images/photo.jpg")
+```
+
+**Parameters**
+
+<ParamField path="image_path" type="Path | str" required>
+  Path to the image file to process.
+</ParamField>
+
+**Returns** `DetectionResult`
+
+---
+
+### `process_directory`
+
+Process all images in a directory and collect results in a `BatchDetectionResult`.
+
+```python
+batch = detector.process_directory(
+    input_dir="./data/raw/images",
+    output_dir="./output",
+)
+print(f"{batch.total_objects} objects in {batch.image_count} images")
+```
+
+**Parameters**
+
+<ParamField path="input_dir" type="Path | str" required>
+  Directory containing input images. All supported image formats are processed.
+</ParamField>
+
+<ParamField path="output_dir" type="Path | str | None" default="None">
+  Optional directory for saving intermediate processing images. When `None` and `save_intermediate=True`, intermediate images are stored in memory only.
+</ParamField>
+
+**Returns** `BatchDetectionResult`
+
+---
+
+## `DetectionConfig`
+
+Pydantic model holding all detection parameters. All fields have defaults so you only need to supply values you want to change.
+
+```python
+from archeo_cluster.models import DetectionConfig
+
+config = DetectionConfig(
+    target_color="#A98876",
+    min_area=50,
+    max_area=5000,
+    kernel_size=(5, 5),
+    hue_offset=10,
+    saturation_offset=50,
+    value_offset=50,
+)
+```
+
+<ResponseField name="target_color" type="str" default="#A98876">
+  Target color in hex format (e.g. `"#A98876"`). The detector converts this to HSV and applies `hue_offset`, `saturation_offset`, and `value_offset` tolerances to produce the color range mask.
+</ResponseField>
+
+<ResponseField name="min_area" type="int" default="50">
+  Minimum contour area in pixels. Contours smaller than this are discarded. Must be ≥ 1.
+</ResponseField>
+
+<ResponseField name="max_area" type="int" default="5000">
+  Maximum contour area in pixels. Contours larger than this are discarded. Must be ≥ 1.
+</ResponseField>
+
+<ResponseField name="kernel_size" type="tuple[int, int]" default="(5, 5)">
+  Size of the morphological operation kernel used for closing and opening passes on the mask.
+</ResponseField>
+
+<ResponseField name="hue_offset" type="int" default="10">
+  Tolerance for the hue channel in HSV color matching. Range 0–90.
+</ResponseField>
+
+<ResponseField name="saturation_offset" type="int" default="50">
+  Tolerance for the saturation channel in HSV color matching. Range 0–127.
+</ResponseField>
+
+<ResponseField name="value_offset" type="int" default="50">
+  Tolerance for the value channel in HSV color matching. Range 0–127.
+</ResponseField>
+
+---
+
+## Return types
+
+### `DetectionResult`
+
+Result of running detection on a single image. This is a dataclass (not a Pydantic model).
+
+<ResponseField name="image_name" type="str" required>
+  Name of the processed image (the file stem when loaded from disk).
+</ResponseField>
+
+<ResponseField name="contours" type="list[NDArray[Any]]" default="[]">
+  List of filtered OpenCV contour arrays that passed the area constraints.
+</ResponseField>
+
+<ResponseField name="objects" type="list[DetectedObject]" default="[]">
+  List of detected objects with extracted features.
+</ResponseField>
+
+<ResponseField name="processing_steps" type="dict[str, NDArray[Any]]" default="{}">
+  Intermediate images keyed by step name (e.g. `"01_hsv"`, `"02_mask_initial"`). Populated only when `save_intermediate=True`.
+</ResponseField>
+
+<ResponseField name="count" type="int">
+  Read-only property. Number of detected objects (`len(objects)`).
+</ResponseField>
+
+---
+
+### `BatchDetectionResult`
+
+Aggregated results from processing a directory of images. This is a dataclass.
+
+<ResponseField name="results" type="list[DetectionResult]" default="[]">
+  One `DetectionResult` per successfully processed image.
+</ResponseField>
+
+<ResponseField name="total_objects" type="int">
+  Read-only property. Sum of detected objects across all images.
+</ResponseField>
+
+<ResponseField name="image_count" type="int">
+  Read-only property. Number of images in `results`.
+</ResponseField>
+
+---
+
+### `DetectedObject`
+
+A single detected object with its metadata and extracted features.
+
+<ResponseField name="image_name" type="str" required>
+  Filename of the source image.
+</ResponseField>
+
+<ResponseField name="contour_index" type="int" required>
+  Zero-based index of this contour within the image. Must be ≥ 0.
+</ResponseField>
+
+<ResponseField name="features" type="ContourFeatures" required>
+  Extracted geometric features for this object.
+  <Expandable title="ContourFeatures fields">
+    <ResponseField name="area" type="float" required>
+      Contour area in pixels (≥ 0).
+    </ResponseField>
+    <ResponseField name="perimeter" type="float" required>
+      Contour perimeter in pixels (≥ 0).
+    </ResponseField>
+    <ResponseField name="centroid_x" type="int" required>
+      X coordinate of the centroid. Used for spatial analysis, not clustering.
+    </ResponseField>
+    <ResponseField name="centroid_y" type="int" required>
+      Y coordinate of the centroid. Used for spatial analysis, not clustering.
+    </ResponseField>
+    <ResponseField name="circularity" type="float" required>
+      How circular the shape is: `4 * π * area / perimeter²`. A perfect circle equals 1.0.
+    </ResponseField>
+    <ResponseField name="aspect_ratio" type="float" required>
+      Ratio of bounding rectangle width to height.
+    </ResponseField>
+    <ResponseField name="solidity" type="float" required>
+      Ratio of contour area to convex hull area.
+    </ResponseField>
+    <ResponseField name="extent" type="float" required>
+      Ratio of contour area to bounding rectangle area.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### `ContourFeatures`
+
+Features extracted from a single contour. See the expandable above for field descriptions.
+
+```python
+from archeo_cluster.models import ContourFeatures
+
+features = ContourFeatures(
+    area=342.5,
+    perimeter=78.2,
+    centroid_x=120,
+    centroid_y=88,
+    circularity=0.71,
+    aspect_ratio=1.05,
+    solidity=0.93,
+    extent=0.68,
+)
+```

@@ -1,0 +1,70 @@
+---
+title: "CLI Overview"
+description: "Overview of all archeo-cluster CLI commands."
+---
+
+The `archeo-cluster` CLI provides a set of commands for running archaeological image analysis — from object detection through clustering to spatial statistics. Every command is available through two equivalent entry points:
+
+<CodeGroup>
+
+```bash run-cli
+./run-cli --help
+./run-cli <command> [options]
+```
+
+```bash uv run
+uv run archeo-cluster --help
+uv run archeo-cluster <command> [options]
+```
+
+</CodeGroup>
+
+## Global flags
+
+<ParamField path="--version" type="boolean">
+  Print the current version and exit. Short alias: `-v`.
+</ParamField>
+
+<ParamField path="--verbose" type="boolean">
+  Enable verbose (DEBUG-level) log output. Short alias: `-V`.
+</ParamField>
+
+## Commands
+
+<CardGroup cols={2}>
+  <Card title="detect" icon="magnifying-glass" href="/cli/detect">
+    Detect archaeological objects in images using color segmentation. Produces a `features.csv` and annotated output images.
+  </Card>
+  <Card title="cluster" icon="circle-nodes" href="/cli/cluster">
+    Perform K-Means clustering on the features extracted by `detect`. Uses the elbow method to find the optimal number of clusters.
+  </Card>
+  <Card title="analyze" icon="chart-scatter" href="/cli/analyze">
+    Run spatial analysis on clustered data using the Average Nearest Neighbor (ANN) index to identify distribution patterns.
+  </Card>
+  <Card title="pipeline" icon="arrow-right-arrow-left" href="/cli/pipeline">
+    Run the complete detect → cluster → analyze pipeline in a single command. Recommended entry point for most analyses.
+  </Card>
+  <Card title="sessions" icon="folder-open" href="/cli/sessions">
+    List and manage analysis sessions stored in the centralized session directory.
+  </Card>
+</CardGroup>
+
+## General usage pattern
+
+Most analyses follow this three-stage flow:
+
+```
+Images  →  detect  →  features.csv
+                  →  cluster  →  clustered.csv
+                                         →  analyze  →  plots / ANN index
+```
+
+The `pipeline` command executes all three stages automatically and is the recommended starting point. Use the individual commands when you need to rerun a single stage or work with existing output files.
+
+<Tip>
+  Run any command with `--help` to see all available options for that command.
+
+  ```bash
+  ./run-cli detect --help
+  ```
+</Tip>

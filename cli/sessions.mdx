@@ -1,0 +1,78 @@
+---
+title: "sessions"
+description: "List and manage analysis sessions."
+---
+
+The `sessions` command lets you inspect the sessions created by `detect` and `pipeline`. Each session is a directory that contains all results and metadata for a single analysis run.
+
+## Syntax
+
+```bash
+./run-cli sessions [options]
+```
+
+## Options
+
+<ParamField path="--list" type="boolean">
+  Print a table of all sessions with their name, creation time, status, and path. Short alias: `-l`.
+</ParamField>
+
+<ParamField path="--latest" type="boolean">
+  Print the path of the most recently created session. Useful for piping into other commands.
+</ParamField>
+
+When called with no options, the command prints the storage location and a usage hint.
+
+## Session storage location
+
+Sessions are stored in a centralized directory managed by the `StorageManager`. Running `sessions` without flags prints the current storage path:
+
+```bash
+./run-cli sessions
+# Storage location: /home/user/.local/share/archeo-cluster/sessions
+# Use --list to see all sessions or --latest to get the latest session path.
+```
+
+## Example output
+
+### --list
+
+```
+          Analysis Sessions
+┌──────────────────┬──────────────────┬──────────────┬──────────────────────────────────────┐
+│ Session          │ Created          │ Status       │ Path                                 │
+├──────────────────┼──────────────────┼──────────────┼──────────────────────────────────────┤
+│ excavation-2025  │ 2025-06-01 14:32 │ completed    │ /home/user/.local/share/...          │
+│ site-b-test      │ 2025-05-28 09:15 │ completed    │ /home/user/.local/share/...          │
+│ draft-run        │ 2025-05-20 17:44 │ error        │ /home/user/.local/share/...          │
+└──────────────────┴──────────────────┴──────────────┴──────────────────────────────────────┘
+
+Storage location: /home/user/.local/share/archeo-cluster/sessions
+```
+
+### --latest
+
+```bash
+./run-cli sessions --latest
+# /home/user/.local/share/archeo-cluster/sessions/excavation-2025
+```
+
+## Using session paths for downstream analysis
+
+The `--latest` flag is convenient when chaining commands manually after a `detect` run:
+
+```bash
+# Run detection and capture the session path
+./run-cli detect -i ./data/raw/images --session my-site
+SESSION=$(./run-cli sessions --latest)
+
+# Pass the session's features CSV directly to cluster
+./run-cli cluster -i "$SESSION/features.csv"
+
+# Then analyze each clustered CSV
+./run-cli analyze -i "$SESSION/clusters/image01/image01_clustered.csv"
+```
+
+<Note>
+  The `pipeline` command handles this chaining automatically. Use `sessions` for manual workflows or when rerunning individual stages on existing session data.
+</Note>

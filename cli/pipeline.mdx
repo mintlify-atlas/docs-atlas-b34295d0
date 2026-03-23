@@ -1,0 +1,109 @@
+---
+title: "pipeline"
+description: "Run the complete detect → cluster → analyze pipeline in a single command."
+---
+
+The `pipeline` command executes all three analysis stages — object detection, K-Means clustering, and spatial analysis — in sequence. It is the recommended entry point for most analyses.
+
+## Syntax
+
+```bash
+./run-cli pipeline --input-dir <path> [options]
+```
+
+## Options
+
+<ParamField path="--input-dir" type="string" required>
+  Directory containing the input images to process. Short alias: `-i`.
+</ParamField>
+
+<ParamField path="--output-dir" type="string">
+  Write all results to this directory instead of creating a session (legacy mode, not recommended). Short alias: `-o`.
+</ParamField>
+
+<ParamField path="--session" type="string">
+  Name the session that will be created to store results. Short alias: `-s`.
+
+  If omitted, the session is named after the input directory. Ignored when `--output-dir` is set.
+</ParamField>
+
+<ParamField path="--color" type="string" default="#A98876">
+  Target color for the detection stage in hexadecimal format. Short alias: `-c`.
+</ParamField>
+
+<ParamField path="--open" type="boolean" default="true">
+  Open the results folder in the system file manager when the pipeline finishes.
+
+  Pass `--no-open` to disable this behavior.
+</ParamField>
+
+## What each stage does
+
+<Steps>
+  <Step title="Step 1: Object detection">
+    Runs color-based segmentation on every image in `--input-dir`. Detected contours are filtered by area and their geometric features are extracted to `features.csv`.
+  </Step>
+  <Step title="Step 2: K-Means clustering">
+    Reads `features.csv` and groups objects into clusters using the elbow method to determine the optimal K. Produces per-image cluster scatter plots and elbow curves.
+  </Step>
+  <Step title="Step 3: Spatial analysis">
+    Computes the Average Nearest Neighbor (ANN) index for each cluster in each image to characterize distribution patterns (clustered, random, or dispersed).
+  </Step>
+</Steps>
+
+## Session management
+
+By default, `pipeline` creates a session and stores all results in a centralized directory. The session records metadata about each stage, including image counts, object counts, and performance metrics.
+
+```
+<storage>/<session-name>/
+├── features.csv
+├── metadata.json
+├── detection/          ← annotated images from Step 1
+├── clusters/           ← cluster CSVs and plots from Step 2
+│   └── <image-name>/
+│       ├── <image-name>_clustered.csv
+│       ├── elbow_plot.png
+│       └── cluster_scatter.png
+└── analysis/           ← ANN plots and stats from Step 3
+    └── <image-name>/
+```
+
+<Tip>
+  After the pipeline finishes, run `archeo-cluster sessions --list` to see all sessions, or `archeo-cluster sessions --latest` to get the path to the most recent session.
+</Tip>
+
+## Performance summary
+
+At the end of the run, the pipeline prints a performance table showing the duration and peak memory usage for each stage:
+
+```
+ Stage      Duration (s)  Peak Memory (MB)
+ ──────────────────────────────────────────
+ Detection       1.243           45.2
+ Clustering      0.891           38.7
+ Analysis        0.312           22.1
+ Total           2.446           45.2
+```
+
+This data is also saved to `metadata.json` in the session directory.
+
+## Examples
+
+```bash
+# Run the full pipeline with defaults — session named after the input directory
+./run-cli pipeline -i ./data/raw/images
+
+# Named session for reproducibility
+./run-cli pipeline -i ./data/raw/images --session excavation-2025
+
+# Custom target color, do not open the results folder automatically
+./run-cli pipeline -i ./data/raw/images --color "#C4A882" --no-open
+
+# Legacy output to a specific directory (not recommended)
+./run-cli pipeline -i ./data/raw/images -o ./output
+```
+
+<Warning>
+  If no objects are detected in Step 1, the pipeline stops immediately and the session is marked as errored. Verify that `--color` matches the color of the artifacts in your images.
+</Warning>

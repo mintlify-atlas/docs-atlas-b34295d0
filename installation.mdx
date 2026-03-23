@@ -1,0 +1,108 @@
+---
+title: "Installation"
+description: "Install Archeo-Cluster and set up your Python environment."
+---
+
+## Prerequisites
+
+Before installing Archeo-Cluster, make sure you have:
+
+- **Python 3.11 or later** — Archeo-Cluster requires Python 3.11+. Check your version with `python --version`.
+- **uv** — The recommended package manager for Archeo-Cluster. Install it from [docs.astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/).
+
+<Note>
+  `uv` handles virtual environment creation and dependency locking automatically. You do not need to create a virtual environment manually.
+</Note>
+
+## Install Archeo-Cluster
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/kevingarcia/archeo-cluster.git
+    cd archeo-cluster
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    Run `uv sync` to install all dependencies into an isolated virtual environment:
+
+    ```bash
+    uv sync
+    ```
+
+    `uv` reads `pyproject.toml` and installs all required packages including NumPy, OpenCV, pandas, scikit-learn, matplotlib, and Typer.
+  </Step>
+  <Step title="Verify the installation">
+    Confirm the CLI is available using either of these commands:
+
+    <CodeGroup>
+
+    ```bash run-cli
+    ./run-cli --help
+    ```
+
+    ```bash uv run
+    uv run archeo-cluster --help
+    ```
+
+    </CodeGroup>
+
+    You should see the Archeo-Cluster help output listing available commands: `detect`, `cluster`, `analyze`, `pipeline`, and `sessions`.
+  </Step>
+</Steps>
+
+## Dev install
+
+If you plan to contribute or run the test suite, install the development dependencies:
+
+```bash
+uv sync --extra dev
+```
+
+This adds pytest, ruff, mypy, pre-commit, and type stubs to your environment. Then set up the pre-commit hooks:
+
+```bash
+uv run pre-commit install
+```
+
+Pre-commit hooks run ruff formatting and linting checks automatically on every commit.
+
+## Running make commands
+
+The project includes a `Makefile` with common development tasks:
+
+| Command | Description |
+|---|---|
+| `make install` | Install dependencies with `uv sync --extra dev` |
+| `make test` | Run the full test suite with pytest |
+| `make lint` | Run ruff and mypy on `src/` and `tests/` |
+| `make format` | Format and auto-fix code with ruff |
+| `make check` | Run lint and test together |
+
+```bash
+# Run tests
+make test
+
+# Lint and type-check
+make lint
+
+# Format code
+make format
+
+# Run all checks
+make check
+```
+
+<Tip>
+  Use `make check` before opening a pull request to run both linting and the test suite in one step.
+</Tip>
+
+## Troubleshooting
+
+<Warning>
+  If `./run-cli` fails with a permission error, make the script executable: `chmod +x run-cli`
+</Warning>
+
+If `uv` is not found, install it following the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/) and ensure it is on your `PATH`.
+
+If you see import errors for `cv2` or other packages, confirm you are running commands with `uv run` or that your shell has activated the uv-managed virtual environment.

@@ -1,80 +1,183 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Analyze your first set of archaeological images in minutes."
 ---
 
-## Get started in three steps
+This guide walks you through running Archeo-Cluster's complete analysis pipeline on a set of images, from installation to viewing your results.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+- Python 3.11 or later
+- [uv](https://docs.astral.sh/uv/) package manager
+- A directory of archaeological images (JPEG, PNG)
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Run the pipeline
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Clone and install">
+    Clone the repository and install all dependencies with `uv sync`:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    git clone https://github.com/keviingarciah/archeo-cluster.git
+    cd archeo-cluster
+    uv sync
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    Verify the installation:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    ./run-cli --help
+    ```
+  </Step>
 
-### Step 3: Go live
+  <Step title="Prepare your images">
+    Place your archaeological images in a directory. The included sample dataset is a good starting point:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    ls ./dataset/
+    ```
+
+    Archeo-Cluster processes all `.jpg`, `.jpeg`, and `.png` files in the input directory.
+  </Step>
+
+  <Step title="Run the complete pipeline">
+    Use the `pipeline` command to run all three stages — detection, clustering, and spatial analysis — in one step:
+
+    ```bash
+    ./run-cli pipeline --input-dir ./dataset --color "#A98876"
+    ```
+
+    The `--color` flag specifies the target color for artifact detection in hex format. The default `#A98876` works well for ceramic fragments.
+
+    You should see output like:
+
+    ```
+    Running complete analysis pipeline
+    Session: /home/user/.local/share/archeo-cluster/sessions/dataset_20250320_143022
+
+    ── Step 1: Object Detection ──
+    Detected 47 objects in 3 images
+
+    ── Step 2: K-Means Clustering ──
+    Created 12 clusters across 3 images
+
+    ── Step 3: Spatial Analysis ──
+    Analyzed image_01
+    Analyzed image_02
+    Analyzed image_03
+
+    ── Performance Summary ──
+    ┌──────────┬──────────────┬──────────────────┐
+    │ Stage    │ Duration (s) │ Peak Memory (MB) │
+    ├──────────┼──────────────┼──────────────────┤
+    │ Detection│        2.341 │             84.2 │
+    │ Clustering│       0.812 │             52.1 │
+    │ Analysis │       0.445 │             38.7 │
+    │ Total    │       3.598 │            124.9 │
+    └──────────┴──────────────┴──────────────────┘
+
+    Pipeline complete!
+    ```
+  </Step>
+
+  <Step title="Review output files">
+    Each session stores its results in a dedicated directory. The output includes:
+
+    | File | Description |
+    |------|-------------|
+    | `features.csv` | Geometric features extracted from each detected object |
+    | `<image>/<image>_clustered.csv` | Features with cluster assignments |
+    | `<image>/elbow_plot.png` | K-selection elbow curve |
+    | `<image>/cluster_scatter.png` | Cluster scatter plot |
+    | `<image>/ann_results.csv` | Average Nearest Neighbor index per cluster |
+    | `<image>/ann_results.png` | Spatial distribution map |
+    | `<image>/<image>.geojson` | GeoJSON export for QGIS |
+
+    <Note>
+      The results folder opens automatically when the pipeline completes. Use `--no-open` to disable this behavior.
+    </Note>
+  </Step>
+
+  <Step title="View and manage sessions">
+    List all past analysis sessions:
+
+    ```bash
+    ./run-cli sessions --list
+    ```
+
+    Get the path to the latest session:
+
+    ```bash
+    ./run-cli sessions --latest
+    ```
+
+    Use a named session to organize results:
+
+    ```bash
+    ./run-cli pipeline --input-dir ./dataset --session "site_A_excavation_2025"
+    ```
+  </Step>
+</Steps>
+
+## Run stages individually
+
+You can also run each stage of the pipeline separately for more control:
+
+```bash
+# Stage 1: Detect objects and extract features
+./run-cli detect --input-dir ./dataset --color "#A98876" --min-area 50 --max-area 5000
+
+# Stage 2: Cluster detected features
+./run-cli cluster --input ./results/features.csv --max-k 10
+
+# Stage 3: Run spatial analysis
+./run-cli analyze --input ./results/clusters/image_01/image_01_clustered.csv
+```
+
+## Python API
+
+You can also drive the analysis programmatically from Python:
+
+```python
+from archeo_cluster.core.detection import ObjectDetector
+from archeo_cluster.core.clustering import KMeansAnalyzer
+from archeo_cluster.core.spatial import run_spatial_analysis
+from archeo_cluster.models import DetectionConfig, ClusteringConfig
+
+# Stage 1: Detection
+config = DetectionConfig(target_color="#A98876", min_area=50, max_area=5000)
+detector = ObjectDetector(config)
+results = detector.process_directory("./dataset", "./output/detection")
+
+# Stage 2: Clustering
+import pandas as pd
+df = pd.DataFrame(results.to_feature_rows())
+df.to_csv("./output/features.csv", index=False)
+
+analyzer = KMeansAnalyzer(ClusteringConfig(max_k=10))
+clusters = analyzer.process_features_csv("./output/features.csv", "./output/clusters")
+
+# Stage 3: Spatial analysis
+for result in clusters.results:
+    clustered_csv = f"./output/clusters/{result.image_name}/{result.image_name}_clustered.csv"
+    desc_stats, ann_results = run_spatial_analysis(clustered_csv, f"./output/analysis/{result.image_name}")
+    for ann in ann_results:
+        print(f"  Cluster {ann.cluster_id}: R={ann.r_index} — {ann.interpretation}")
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Explore all commands, flags, and default values.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Customize detection, clustering, and paths with a config file.
+  </Card>
+  <Card title="Analysis Pipeline Guide" icon="chart-line" href="/guides/analysis-pipeline">
+    Deep dive into each stage of the pipeline.
+  </Card>
+  <Card title="Python API" icon="code" href="/api/overview">
+    Full API reference for programmatic usage.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

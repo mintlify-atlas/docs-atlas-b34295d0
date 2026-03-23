@@ -1,0 +1,287 @@
+---
+title: "Spatial Analysis API"
+description: "API reference for spatial analysis functions and ANN index calculation."
+---
+
+The spatial module computes descriptive statistics and the Average Nearest Neighbor (ANN) index for each cluster, generates visualisation plots, and exports results in GeoJSON format for use in GIS tools such as QGIS.
+
+```python
+from archeo_cluster.core.spatial import (
+    run_spatial_analysis,
+    compute_ann_index,
+    generate_descriptive_stats,
+    export_clusters_to_geojson,
+    ImageReference,
+)
+```
+
+---
+
+## `run_spatial_analysis`
+
+Run the complete spatial analysis pipeline on a clustered CSV file. This is the primary entry point for the analysis stage.
+
+```python
+from archeo_cluster.core.spatial import run_spatial_analysis
+
+desc_stats, ann_results = run_spatial_analysis(
+    csv_path="./clusters/image/image_clustered.csv",
+    output_dir="./plots",
+)
+
+for ann in ann_results:
+    print(f"Cluster {ann.cluster_id}: R={ann.r_index} — {ann.interpretation}")
+```
+
+The function:
+1. Loads the clustered CSV and validates required columns (`area`, `perimeter`, `cluster`, `centroid_x`, `centroid_y`).
+2. Computes descriptive statistics and saves `descriptive_stats.csv`.
+3. Generates boxplots for morphological features and a spatial distribution map.
+4. Computes the ANN index per cluster and saves `ann_results.csv` and `ann_results.png`.
+
+<ParamField path="csv_path" type="Path | str" required>
+  Path to the clustered CSV file produced by `KMeansAnalyzer.process_features_csv`. Must contain `area`, `perimeter`, `cluster`, `centroid_x`, and `centroid_y` columns.
+</ParamField>
+
+<ParamField path="output_dir" type="Path | str" default="plots">
+  Directory for output files. Created automatically if it does not exist.
+</ParamField>
+
+**Returns** `tuple[list[DescriptiveStats], list[ANNResult]]`
+
+---
+
+## `compute_ann_index`
+
+Compute the Average Nearest Neighbor R-index for each cluster in a DataFrame.
+
+```python
+import pandas as pd
+from archeo_cluster.core.spatial import compute_ann_index
+
+df = pd.read_csv("./clusters/image/image_clustered.csv")
+ann_results = compute_ann_index(df, cluster_col="cluster")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame containing `centroid_x`, `centroid_y`, and a cluster column.
+</ParamField>
+
+<ParamField path="cluster_col" type="str" default="cluster">
+  Name of the column holding cluster labels.
+</ParamField>
+
+**Returns** `list[ANNResult]`
+
+### ANN R-index interpretation
+
+The R-index is the ratio of the observed mean nearest-neighbor distance to the expected mean distance for a random Poisson process at the same density:
+
+| R value | Interpretation |
+|---|---|
+| R < 0.9 | Clustered — objects are closer together than expected by chance |
+| 0.9 ≤ R ≤ 1.1 | Random — distribution consistent with a random process |
+| R > 1.1 | Dispersed — objects are spread further apart than expected |
+
+When a cluster has fewer than 2 points, or the study area has zero extent, `r_index` is `None` and `interpretation` is `"Insufficient points"`.
+
+---
+
+## `generate_descriptive_stats`
+
+Generate descriptive statistics for each cluster in a DataFrame.
+
+```python
+from archeo_cluster.core.spatial import generate_descriptive_stats
+
+stats = generate_descriptive_stats(df, cluster_col="cluster")
+for s in stats:
+    print(f"Cluster {s.cluster_id}: n={s.count}, mean_area={s.area_mean:.1f}")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame containing `area`, `perimeter`, and a cluster column.
+</ParamField>
+
+<ParamField path="cluster_col" type="str" default="cluster">
+  Name of the column holding cluster labels.
+</ParamField>
+
+**Returns** `list[DescriptiveStats]`
+
+---
+
+## `export_clusters_to_geojson`
+
+Convenience function that reads a clustered CSV and exports it directly to a GeoJSON file.
+
+```python
+from archeo_cluster.core.spatial import export_clusters_to_geojson, ImageReference
+
+# Export with optional georeferencing
+ref = ImageReference(
+    origin_x=14.5983,
+    origin_y=89.4167,
+    pixel_size_x=0.0001,
+    pixel_size_y=0.0001,
+    crs="EPSG:4326",
+)
+export_clusters_to_geojson(
+    csv_path="./clusters/image/image_clustered.csv",
+    output_path="./output.geojson",
+    image_reference=ref,
+)
+```
+
+<ParamField path="csv_path" type="Path | str" required>
+  Path to the input clustered CSV file.
+</ParamField>
+
+<ParamField path="output_path" type="Path | str" required>
+  Destination path for the GeoJSON file.
+</ParamField>
+
+<ParamField path="image_reference" type="ImageReference | None" default="None">
+  Optional georeferencing data. When `None`, pixel coordinates are written directly to the GeoJSON and a warning is logged.
+</ParamField>
+
+**Returns** `None`
+
+---
+
+## `export_to_geojson`
+
+Export an in-memory DataFrame to a GeoJSON file.
+
+```python
+import pandas as pd
+from archeo_cluster.core.spatial import export_to_geojson
+
+df = pd.read_csv("./clusters/image/image_clustered.csv")
+export_to_geojson(df, output_path="./output.geojson")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame with `centroid_x`, `centroid_y`, and other properties to include as GeoJSON feature attributes.
+</ParamField>
+
+<ParamField path="output_path" type="Path | str" required>
+  Destination path for the GeoJSON file.
+</ParamField>
+
+<ParamField path="image_reference" type="ImageReference | None" default="None">
+  Optional georeferencing data.
+</ParamField>
+
+**Returns** `None`
+
+---
+
+## Data classes
+
+### `ANNResult`
+
+Result of Average Nearest Neighbor analysis for a single cluster.
+
+<ResponseField name="cluster_id" type="int" required>
+  Zero-based cluster identifier.
+</ResponseField>
+
+<ResponseField name="r_index" type="float | None" required>
+  The computed R-index value, rounded to 3 decimal places. `None` when the cluster has fewer than 2 points or the study area has zero extent.
+</ResponseField>
+
+<ResponseField name="interpretation" type="str" required>
+  Human-readable label: `"Clustered"`, `"Random"`, `"Dispersed"`, or `"Insufficient points"`.
+</ResponseField>
+
+---
+
+### `DescriptiveStats`
+
+Descriptive statistics for objects belonging to a single cluster.
+
+<ResponseField name="cluster_id" type="int" required>
+  Zero-based cluster identifier.
+</ResponseField>
+
+<ResponseField name="count" type="int" required>
+  Number of objects in the cluster.
+</ResponseField>
+
+<ResponseField name="area_mean" type="float" required>
+  Mean object area in pixels.
+</ResponseField>
+
+<ResponseField name="area_std" type="float" required>
+  Standard deviation of object area. `0.0` when the cluster has only one object.
+</ResponseField>
+
+<ResponseField name="area_min" type="float" required>
+  Minimum object area in pixels.
+</ResponseField>
+
+<ResponseField name="area_max" type="float" required>
+  Maximum object area in pixels.
+</ResponseField>
+
+<ResponseField name="perimeter_mean" type="float" required>
+  Mean object perimeter in pixels.
+</ResponseField>
+
+<ResponseField name="perimeter_std" type="float" required>
+  Standard deviation of object perimeter. `0.0` when the cluster has only one object.
+</ResponseField>
+
+---
+
+### `ImageReference`
+
+Georeferencing metadata for converting pixel coordinates to a real-world coordinate system.
+
+```python
+from archeo_cluster.core.spatial import ImageReference
+
+ref = ImageReference(
+    origin_x=14.5983,
+    origin_y=89.4167,
+    pixel_size_x=0.0001,
+    pixel_size_y=0.0001,
+    crs="EPSG:4326",
+)
+geo_x, geo_y = ref.pixel_to_geo(pixel_x=320, pixel_y=240)
+```
+
+<ResponseField name="origin_x" type="float" required>
+  X coordinate of the image origin in real-world units.
+</ResponseField>
+
+<ResponseField name="origin_y" type="float" required>
+  Y coordinate of the image origin in real-world units.
+</ResponseField>
+
+<ResponseField name="pixel_size_x" type="float" required>
+  Size of one pixel in the X direction (real-world units per pixel).
+</ResponseField>
+
+<ResponseField name="pixel_size_y" type="float" required>
+  Size of one pixel in the Y direction (real-world units per pixel). The Y axis is inverted during conversion to match the typical image coordinate system.
+</ResponseField>
+
+<ResponseField name="crs" type="str | None" default="None">
+  Coordinate reference system identifier (e.g. `"EPSG:4326"`). `None` indicates pixel / local coordinates.
+</ResponseField>
+
+#### `pixel_to_geo`
+
+Convert a pixel coordinate pair to geographic (or projected) coordinates.
+
+<ParamField path="pixel_x" type="float" required>
+  X coordinate in pixels.
+</ParamField>
+
+<ParamField path="pixel_y" type="float" required>
+  Y coordinate in pixels.
+</ParamField>
+
+**Returns** `tuple[float, float]` — `(geo_x, geo_y)` in the target CRS, or `(x, y)` in local units when `crs` is `None`.

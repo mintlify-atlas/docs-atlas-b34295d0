@@ -1,0 +1,208 @@
+---
+title: "Session Management"
+description: "Use sessions to organize, store, and retrieve analysis results."
+---
+
+Every time you run `detect`, `pipeline`, or any stage with a `--session` flag, Archeo-Cluster writes all outputs to a **session directory**. Sessions let you keep multiple analyses separate, compare runs, and resume work without overwriting previous results.
+
+## What a session stores
+
+A session is a self-contained directory with a predictable layout:
+
+```
+<session_dir>/
+├── metadata.json          ← session ID, name, status, timestamps, config, performance metrics
+├── detection/
+│   ├── features.csv       ← one row per detected object
+│   └── <image_name>/
+│       ├── 01_hsv.png
+│       ├── 02_mask_initial.png
+│       ├── 03_mask_closed.png
+│       ├── 04_mask_morph_final.png
+│       ├── 05_raw_contours.png
+│       └── 06_filtered_contours_final.png
+├── clustering/
+│   └── <image_name>/
+│       ├── <image_name>_clustered.csv
+│       ├── elbow_method.png
+│       ├── silhouette_analysis.png
+│       ├── cluster_distribution.png
+│       ├── morphological_scatter.png
+│       ├── clusters_visualization.png
+│       └── cluster_groups.png
+├── analysis/
+│   └── <image_name>/
+│       ├── descriptive_stats.csv
+│       ├── ann_results.csv
+│       ├── ann_results.png
+│       ├── spatial_distribution_map.png
+│       └── boxplot_*.png
+└── plots/                 ← reserved for additional plot output
+```
+
+The paths exposed by `SessionPaths` are:
+
+| Property | Path |
+|----------|------|
+| `session_dir` | root of the session |
+| `metadata_path` | `<session_dir>/metadata.json` |
+| `detection_dir` / `detection_images_dir` | `<session_dir>/detection` |
+| `features_csv` | `<session_dir>/detection/features.csv` |
+| `clustering_dir` | `<session_dir>/clustering` |
+| `analysis_dir` | `<session_dir>/analysis` |
+| `plots_dir` | `<session_dir>/plots` |
+
+---
+
+## Storage location
+
+Sessions are stored in a platform-appropriate user data directory resolved by [`platformdirs`](https://platformdirs.readthedocs.io/). You can override the base directory with the `ARCHEO_DATA_DIR` environment variable:
+
+```bash
+# Use the default platform data directory
+uv run archeo-cluster sessions
+# Storage location: /home/user/.local/share/archeo-cluster  (Linux example)
+
+# Override storage location
+export ARCHEO_DATA_DIR=/mnt/fieldwork/archeo-data
+uv run archeo-cluster pipeline --input-dir ./images
+```
+
+<Note>
+  On macOS the default base directory is `~/Library/Application Support/archeo-cluster`. On Windows it is `%APPDATA%\archeo-cluster`.
+</Note>
+
+---
+
+## Creating a named session
+
+Pass `--session` to any command that creates a session:
+
+```bash
+# Detect only, with a named session
+uv run archeo-cluster detect \
+  --input-dir ./site_a/images \
+  --session "site_a_may_2025"
+
+# Full pipeline with a named session
+uv run archeo-cluster pipeline \
+  --input-dir ./site_a/images \
+  --session "site_a_may_2025"
+```
+
+If you omit `--session`, the input directory name is used automatically. Either way a unique timestamp prefix is added to the directory name so repeated runs never collide:
+
+```
+~/.local/share/archeo-cluster/
+├── 2025-05-01_143022_site_a_may_2025/
+├── 2025-05-03_091500_site_a_may_2025/
+└── 2025-05-10_160045_quick_test/
+```
+
+---
+
+## Listing sessions
+
+```bash
+uv run archeo-cluster sessions --list
+```
+
+This prints a table with the session name, creation timestamp, current status, and full path:
+
+```
+              Analysis Sessions
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Session              ┃ Created           ┃ Status      ┃ Path                         ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ site_a_may_2025      │ 2025-05-01 14:30  │ COMPLETED   │ ~/.local/share/.../           │
+│ quick_test           │ 2025-05-10 16:00  │ DETECTION_DONE │ ~/.local/share/.../        │
+└──────────────────────┴───────────────────┴─────────────┴──────────────────────────────┘
+
+Storage location: /home/user/.local/share/archeo-cluster
+```
+
+---
+
+## Getting the latest session path
+
+```bash
+uv run archeo-cluster sessions --latest
+```
+
+Prints only the full path of the most-recently created session, which is useful for scripting:
+
+```bash
+LATEST=$(uv run archeo-cluster sessions --latest)
+echo "Latest session: $LATEST"
+ls "$LATEST"
+```
+
+---
+
+## Session status lifecycle
+
+The `metadata.json` file tracks a `status` field that advances as each pipeline stage completes:
+
+```
+CREATED
+   │
+   ▼
+DETECTING
+   │
+   ▼
+DETECTION_DONE
+   │
+   ▼
+CLUSTERING
+   │
+   ▼
+CLUSTERING_DONE
+   │
+   ▼
+ANALYZING
+   │
+   ▼
+COMPLETED
+```
+
+If any stage encounters an unrecoverable error the status is set to `ERROR`. You can inspect the current status at any time:
+
+```bash
+cat "$(uv run archeo-cluster sessions --latest)/metadata.json" | python3 -m json.tool | grep status
+```
+
+---
+
+## Using the Python API
+
+You can manage sessions programmatically with `StorageManager` and `SessionPaths`:
+
+```python
+from archeo_cluster.core.output import StorageManager, SessionPaths
+from archeo_cluster.core.output.metadata import SessionStatus
+
+# Create a new session
+manager = StorageManager()  # uses platformdirs default, or ARCHEO_DATA_DIR
+paths: SessionPaths = manager.create_session(
+    name="site_b_analysis",
+    config={"color": "#A98876", "min_area": 100},
+    input_dir="/fieldwork/site_b/images",
+)
+
+print(paths.session_dir)      # full path to session root
+print(paths.features_csv)     # .../detection/features.csv
+print(paths.metadata.status)  # SessionStatus.CREATED
+
+# List all sessions (sorted newest first)
+for session in manager.list_sessions():
+    print(session.metadata.name, session.metadata.status)
+
+# Reload the most recent session
+latest = manager.get_latest_session()
+if latest:
+    print(latest.session_dir)
+```
+
+<Tip>
+  Pass `base_dir=tmp_path` to `StorageManager` in tests to isolate session storage from your real data.
+</Tip>

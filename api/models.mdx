@@ -1,0 +1,445 @@
+---
+title: "Data Models"
+description: "Complete reference for all Pydantic models and data classes used in Archeo-Cluster."
+---
+
+All models are importable directly from `archeo_cluster.models`:
+
+```python
+from archeo_cluster.models import (
+    # Config
+    AppConfig, ClusteringConfig, DetectionConfig, PathConfig,
+    # Detection
+    BatchDetectionResult, ContourFeatures, DetectedObject, DetectionResult,
+    # Clustering
+    BatchClusteringResult, ClusterInfo, ClusteringResult, ElbowResult, SilhouetteResult,
+    # Performance
+    PerformanceSummary, StageMetrics,
+)
+```
+
+---
+
+## Config models
+
+### `DetectionConfig`
+
+Pydantic `BaseModel`. Configuration for object detection parameters.
+
+<ResponseField name="target_color" type="str" default="#A98876">
+  Target color in hex format. The detector converts this to HSV and applies `hue_offset`, `saturation_offset`, and `value_offset` to produce the color range mask.
+</ResponseField>
+
+<ResponseField name="min_area" type="int" default="50">
+  Minimum contour area in pixels. Must be ≥ 1.
+</ResponseField>
+
+<ResponseField name="max_area" type="int" default="5000">
+  Maximum contour area in pixels. Must be ≥ 1.
+</ResponseField>
+
+<ResponseField name="kernel_size" type="tuple[int, int]" default="(5, 5)">
+  Size of the morphological operation kernel used for closing and opening passes on the mask.
+</ResponseField>
+
+<ResponseField name="hue_offset" type="int" default="10">
+  Tolerance for the hue channel in HSV color matching. Range 0–90.
+</ResponseField>
+
+<ResponseField name="saturation_offset" type="int" default="50">
+  Tolerance for the saturation channel. Range 0–127.
+</ResponseField>
+
+<ResponseField name="value_offset" type="int" default="50">
+  Tolerance for the value channel. Range 0–127.
+</ResponseField>
+
+---
+
+### `ClusteringConfig`
+
+Pydantic `BaseModel`. Configuration for K-Means clustering parameters.
+
+<ResponseField name="max_k" type="int" default="10">
+  Maximum number of clusters to evaluate in the elbow method. Range 2–50.
+</ResponseField>
+
+<ResponseField name="random_state" type="int" default="42">
+  Random seed for reproducible K-Means results.
+</ResponseField>
+
+<ResponseField name="min_samples_per_cluster" type="int" default="2">
+  Minimum samples required to attempt clustering on an image. Must be ≥ 1.
+</ResponseField>
+
+<ResponseField name="compute_silhouette" type="bool" default="True">
+  When `True`, silhouette scores are computed as a complementary validation metric alongside the elbow method.
+</ResponseField>
+
+---
+
+### `PathConfig`
+
+Pydantic `BaseModel`. Configuration for file system paths.
+
+<ResponseField name="data_dir" type="Path" default="Path('data')">
+  Base directory for input data.
+</ResponseField>
+
+<ResponseField name="results_dir" type="Path" default="Path('results')">
+  Directory for output results.
+</ResponseField>
+
+<ResponseField name="plots_dir" type="Path" default="Path('plots')">
+  Directory for generated plots.
+</ResponseField>
+
+`PathConfig` also provides `ensure_directories()` which calls `mkdir(parents=True, exist_ok=True)` on `results_dir` and `plots_dir`.
+
+---
+
+### `AppConfig`
+
+Pydantic `BaseModel`. Top-level application configuration that combines all sub-configurations.
+
+```python
+from archeo_cluster.models import AppConfig
+from pathlib import Path
+
+# Load from YAML
+config = AppConfig.from_yaml(Path("config.yaml"))
+
+# Or build in code
+config = AppConfig(debug=True, log_level="DEBUG")
+config.to_yaml(Path("config.yaml"))
+```
+
+<ResponseField name="detection" type="DetectionConfig" default="DetectionConfig()">
+  Detection sub-configuration.
+</ResponseField>
+
+<ResponseField name="clustering" type="ClusteringConfig" default="ClusteringConfig()">
+  Clustering sub-configuration.
+</ResponseField>
+
+<ResponseField name="paths" type="PathConfig" default="PathConfig()">
+  Path sub-configuration.
+</ResponseField>
+
+<ResponseField name="debug" type="bool" default="False">
+  Enable debug mode.
+</ResponseField>
+
+<ResponseField name="log_level" type="str" default="INFO">
+  Logging level string (e.g. `"DEBUG"`, `"INFO"`, `"WARNING"`).
+</ResponseField>
+
+**Class methods**
+
+- `AppConfig.from_yaml(path: Path) -> AppConfig` — load from a YAML file.
+- `config.to_yaml(path: Path) -> None` — save to a YAML file.
+
+---
+
+## Detection models
+
+### `ContourFeatures`
+
+Pydantic `BaseModel`. Features extracted from a single contour. All numeric fields are ≥ 0.
+
+<ResponseField name="area" type="float" required>
+  Contour area in pixels.
+</ResponseField>
+
+<ResponseField name="perimeter" type="float" required>
+  Contour perimeter in pixels.
+</ResponseField>
+
+<ResponseField name="centroid_x" type="int" required>
+  X coordinate of the centroid. Used for spatial analysis.
+</ResponseField>
+
+<ResponseField name="centroid_y" type="int" required>
+  Y coordinate of the centroid. Used for spatial analysis.
+</ResponseField>
+
+<ResponseField name="circularity" type="float" required>
+  `4 * π * area / perimeter²`. Equals 1.0 for a perfect circle.
+</ResponseField>
+
+<ResponseField name="aspect_ratio" type="float" required>
+  Bounding rectangle width divided by height.
+</ResponseField>
+
+<ResponseField name="solidity" type="float" required>
+  Contour area divided by convex hull area.
+</ResponseField>
+
+<ResponseField name="extent" type="float" required>
+  Contour area divided by bounding rectangle area.
+</ResponseField>
+
+---
+
+### `DetectedObject`
+
+Pydantic `BaseModel`. A detected object with its source metadata and extracted features.
+
+<ResponseField name="image_name" type="str" required>
+  Filename of the source image.
+</ResponseField>
+
+<ResponseField name="contour_index" type="int" required>
+  Zero-based index of this contour within the image. Must be ≥ 0.
+</ResponseField>
+
+<ResponseField name="features" type="ContourFeatures" required>
+  Extracted geometric features.
+</ResponseField>
+
+---
+
+### `DetectionResult`
+
+Dataclass. Result of detection on a single image.
+
+<ResponseField name="image_name" type="str" required>
+  Name of the processed image.
+</ResponseField>
+
+<ResponseField name="contours" type="list[NDArray[Any]]" default="[]">
+  Filtered OpenCV contour arrays that passed area constraints.
+</ResponseField>
+
+<ResponseField name="objects" type="list[DetectedObject]" default="[]">
+  Detected objects with extracted features.
+</ResponseField>
+
+<ResponseField name="processing_steps" type="dict[str, NDArray[Any]]" default="{}">
+  Intermediate processing images keyed by step name. Populated when `ObjectDetector.save_intermediate` is `True`.
+</ResponseField>
+
+<ResponseField name="count" type="int">
+  Read-only property. `len(objects)`.
+</ResponseField>
+
+`DetectionResult.to_feature_rows()` returns a `list[dict[str, float | int | str]]` suitable for building a pandas DataFrame or writing a CSV.
+
+---
+
+### `BatchDetectionResult`
+
+Dataclass. Aggregated results from processing a directory of images.
+
+<ResponseField name="results" type="list[DetectionResult]" default="[]">
+  One `DetectionResult` per successfully processed image.
+</ResponseField>
+
+<ResponseField name="total_objects" type="int">
+  Read-only property. Sum of all detected objects across every image.
+</ResponseField>
+
+<ResponseField name="image_count" type="int">
+  Read-only property. Number of images in `results`.
+</ResponseField>
+
+`BatchDetectionResult.to_feature_rows()` returns a combined `list[dict[str, float | int | str]]` from all images.
+
+---
+
+## Clustering models
+
+### `ClusterInfo`
+
+Pydantic `BaseModel`. Summary statistics for a single cluster.
+
+<ResponseField name="cluster_id" type="int" required>
+  Zero-based cluster identifier. Must be ≥ 0.
+</ResponseField>
+
+<ResponseField name="size" type="int" required>
+  Number of objects assigned to this cluster. Must be ≥ 0.
+</ResponseField>
+
+<ResponseField name="centroid_x" type="float" required>
+  Mean X coordinate of objects in this cluster.
+</ResponseField>
+
+<ResponseField name="centroid_y" type="float" required>
+  Mean Y coordinate of objects in this cluster.
+</ResponseField>
+
+<ResponseField name="mean_area" type="float" required>
+  Average area (pixels) of objects in this cluster. Must be ≥ 0.
+</ResponseField>
+
+<ResponseField name="mean_perimeter" type="float" required>
+  Average perimeter (pixels) of objects in this cluster. Must be ≥ 0.
+</ResponseField>
+
+---
+
+### `ElbowResult`
+
+Pydantic `BaseModel`. Result of the elbow method K-selection.
+
+<ResponseField name="k_values" type="list[int]" required>
+  K values that were evaluated (typically `[1, 2, ..., max_k]`).
+</ResponseField>
+
+<ResponseField name="inertias" type="list[float]" required>
+  Within-cluster sum of squares (WCSS / inertia) for each K value.
+</ResponseField>
+
+<ResponseField name="optimal_k" type="int" required>
+  The K at the elbow point. Must be ≥ 1.
+</ResponseField>
+
+---
+
+### `SilhouetteResult`
+
+Pydantic `BaseModel`. Result of silhouette score analysis. Silhouette coefficient ranges from -1 (poor) to 1 (perfect).
+
+<ResponseField name="k_values" type="list[int]" required>
+  K values that were evaluated.
+</ResponseField>
+
+<ResponseField name="silhouette_scores" type="list[float | None]" required>
+  Silhouette coefficient for each K. `None` for K=1 (undefined) and for any K exceeding the sample count.
+</ResponseField>
+
+<ResponseField name="optimal_k" type="int | None" default="None">
+  K with the maximum silhouette score. `None` if computation was not possible. Must be ≥ 2 when set.
+</ResponseField>
+
+---
+
+### `ClusteringResult`
+
+Dataclass. Result of K-Means clustering on a single image.
+
+<ResponseField name="image_name" type="str" required>
+  Name of the source image.
+</ResponseField>
+
+<ResponseField name="optimal_k" type="int" required>
+  Optimal number of clusters determined by the elbow method.
+</ResponseField>
+
+<ResponseField name="labels" type="list[int]" default="[]">
+  Cluster assignment for each object row in the input DataFrame.
+</ResponseField>
+
+<ResponseField name="clusters" type="list[ClusterInfo]" default="[]">
+  Summary statistics for each cluster.
+</ResponseField>
+
+<ResponseField name="elbow_result" type="ElbowResult | None" default="None">
+  Output from the elbow method analysis.
+</ResponseField>
+
+<ResponseField name="silhouette_result" type="SilhouetteResult | None" default="None">
+  Output from silhouette score analysis. `None` when `ClusteringConfig.compute_silhouette` is `False`.
+</ResponseField>
+
+<ResponseField name="cluster_count" type="int">
+  Read-only property. `len(clusters)`.
+</ResponseField>
+
+---
+
+### `BatchClusteringResult`
+
+Dataclass. Aggregated results from clustering all images in a features CSV.
+
+<ResponseField name="results" type="list[ClusteringResult]" default="[]">
+  One `ClusteringResult` per image that had enough samples to cluster.
+</ResponseField>
+
+<ResponseField name="image_count" type="int">
+  Read-only property. Number of images in `results`.
+</ResponseField>
+
+<ResponseField name="total_clusters" type="int">
+  Read-only property. Sum of `cluster_count` across all results.
+</ResponseField>
+
+`BatchClusteringResult.get_result(image_name: str) -> ClusteringResult | None` finds the result for a specific image by name.
+
+---
+
+## Performance models
+
+### `StageMetrics`
+
+Pydantic `BaseModel`. Performance metrics for a single pipeline stage (detection, clustering, or analysis).
+
+<ResponseField name="stage_name" type="str" required>
+  Human-readable stage identifier (e.g. `"detection"`).
+</ResponseField>
+
+<ResponseField name="duration_seconds" type="float" required>
+  Wall-clock time in seconds with millisecond precision.
+</ResponseField>
+
+<ResponseField name="memory_peak_mb" type="float" required>
+  Peak memory delta in megabytes (process RSS).
+</ResponseField>
+
+<ResponseField name="memory_before_mb" type="float" default="0.0">
+  Process memory before the stage started (MB).
+</ResponseField>
+
+<ResponseField name="memory_after_mb" type="float" default="0.0">
+  Process memory after the stage completed (MB).
+</ResponseField>
+
+<ResponseField name="cpu_percent" type="float" default="0.0">
+  Average CPU usage during stage execution (0–100 per core).
+</ResponseField>
+
+<ResponseField name="timestamp" type="datetime" default="datetime.now()">
+  When the measurement was taken.
+</ResponseField>
+
+---
+
+### `PerformanceSummary`
+
+Pydantic `BaseModel`. Aggregated performance metrics for an entire pipeline run.
+
+```python
+from archeo_cluster.models import PerformanceSummary
+
+summary = PerformanceSummary(
+    detection=detection_metrics,
+    clustering=clustering_metrics,
+    analysis=analysis_metrics,
+    total_duration_seconds=12.4,
+    peak_memory_mb=184.0,
+)
+print(summary.is_complete())  # True
+```
+
+<ResponseField name="detection" type="StageMetrics | None" default="None">
+  Metrics for the object detection stage.
+</ResponseField>
+
+<ResponseField name="clustering" type="StageMetrics | None" default="None">
+  Metrics for the K-Means clustering stage.
+</ResponseField>
+
+<ResponseField name="analysis" type="StageMetrics | None" default="None">
+  Metrics for the spatial analysis stage.
+</ResponseField>
+
+<ResponseField name="total_duration_seconds" type="float" default="0.0">
+  Sum of all stage durations in seconds.
+</ResponseField>
+
+<ResponseField name="peak_memory_mb" type="float" default="0.0">
+  Maximum memory seen across all stages in megabytes.
+</ResponseField>
+
+`PerformanceSummary.is_complete() -> bool` returns `True` when all three stage metrics (`detection`, `clustering`, `analysis`) are not `None`.

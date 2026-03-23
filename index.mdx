@@ -1,97 +1,93 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Archeo-Cluster"
+description: "Archaeological image analysis using OpenCV object detection and K-Means clustering for artifact classification and spatial distribution analysis."
 ---
 
-## Setting up
-
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install Archeo-Cluster using `uv` and get your environment ready.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first analysis pipeline in minutes.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Complete reference for all CLI commands and options.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Python API" icon="code" href="/api/overview">
+    Use Archeo-Cluster programmatically in your Python scripts.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What is Archeo-Cluster?
 
-Everything you need to create world-class documentation.
+Archeo-Cluster is a Python CLI tool for analyzing archaeological images. It implements a three-stage pipeline that automatically detects artifacts, groups them by similarity, and analyzes their spatial distribution patterns.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+```
+Images → Detection (OpenCV) → Clustering (K-Means) → Spatial Analysis (ANN)
+```
 
-## Need inspiration?
+Built for researchers who need to process large collections of archaeological photographs and extract quantitative data about artifact types and distribution without manual annotation.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## How it works
+
+<Steps>
+  <Step title="Object Detection">
+    Images are converted to HSV color space. Color-based thresholding isolates artifact regions. Morphological operations clean noise. OpenCV `findContours` identifies object boundaries and extracts geometric features: area, perimeter, centroid, circularity, and aspect ratio.
+  </Step>
+  <Step title="K-Means Clustering">
+    Extracted features are normalized and fed into K-Means clustering. The elbow method automatically determines the optimal number of clusters (K) by analyzing within-cluster sum of squares (WCSS). Each artifact is assigned to a cluster based on feature similarity.
+  </Step>
+  <Step title="Spatial Analysis">
+    The Average Nearest Neighbor (ANN) index computes the ratio of observed vs. expected mean nearest-neighbor distances. ANN &lt; 1 indicates clustering, ANN &gt; 1 indicates dispersion, ANN ≈ 1 indicates random distribution. Results export to GeoJSON for use in QGIS.
+  </Step>
+</Steps>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Color segmentation" icon="palette">
+    HSV-based segmentation isolates artifacts by color. Configure the target color with any hex value to match ceramic fragments, stone tools, or other materials.
+  </Card>
+  <Card title="Automatic K selection" icon="chart-line">
+    The elbow method and WCSS analysis automatically determine the optimal number of clusters — no manual tuning required.
+  </Card>
+  <Card title="Spatial statistics" icon="map-pin">
+    Average Nearest Neighbor (ANN) index quantifies whether artifacts cluster, disperse, or distribute randomly across an excavation site.
+  </Card>
+  <Card title="GeoJSON export" icon="file-export">
+    Results export as GeoJSON for direct import into QGIS and other GIS tools for further spatial analysis.
+  </Card>
+  <Card title="Session management" icon="folder">
+    Each analysis run is stored in a named session directory. Revisit, compare, and manage previous results without re-running the pipeline.
+  </Card>
+  <Card title="Python API" icon="python">
+    Every CLI command has a corresponding Python class. Use `ObjectDetector`, `KMeansAnalyzer`, and `run_spatial_analysis` directly in your scripts.
+  </Card>
+</CardGroup>
+
+## Quick example
+
+```bash
+# Install
+git clone https://github.com/keviingarciah/archeo-cluster.git
+cd archeo-cluster
+uv sync
+
+# Run the full pipeline
+./run-cli pipeline --input-dir ./dataset --color "#A98876"
+```
+
+```python
+from archeo_cluster.core.detection import ObjectDetector
+from archeo_cluster.core.clustering import KMeansAnalyzer
+from archeo_cluster.models import DetectionConfig, ClusteringConfig
+
+# Detect artifacts
+config = DetectionConfig(target_color="#A98876", min_area=50, max_area=5000)
+detector = ObjectDetector(config)
+results = detector.process_directory("./dataset", "./output")
+
+# Cluster by feature similarity
+analyzer = KMeansAnalyzer(ClusteringConfig(max_k=10))
+clusters = analyzer.process_features_csv("./output/features.csv", "./clusters")
+```

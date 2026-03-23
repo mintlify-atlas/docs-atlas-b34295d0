@@ -1,0 +1,184 @@
+---
+title: "YAML Configuration"
+description: "Configure Archeo-Cluster using a config.yaml file."
+---
+
+Archeo-Cluster can be configured with a YAML file placed in your project directory. When found, it is loaded automatically at startup — no flags required.
+
+## Where to place the config file
+
+Create the file in your **project root** (the directory from which you run `archeo-cluster` commands). Archeo-Cluster searches the current directory and each parent directory for the following filenames, in order:
+
+```
+config.yaml          ← recommended
+config.yml
+.archeo-cluster.yaml
+```
+
+The first matching file found takes effect. All other locations are ignored.
+
+## Complete configuration example
+
+The block below shows every available field with its default value and an inline comment explaining acceptable values.
+
+```yaml config.yaml
+# ─────────────────────────────────────────────
+# Detection — OpenCV color segmentation
+# ─────────────────────────────────────────────
+detection:
+  # Hex color code of the target object to detect.
+  # Default: "#A98876" (typical ceramic fragment tone)
+  target_color: "#A98876"
+
+  # Minimum contour area in pixels. Objects smaller than this are ignored.
+  # Must be >= 1. Default: 50
+  min_area: 50
+
+  # Maximum contour area in pixels. Objects larger than this are ignored.
+  # Must be >= 1. Default: 5000
+  max_area: 5000
+
+  # Width and height of the morphological operation kernel (opening/closing).
+  # Larger values remove more noise but may merge nearby objects.
+  # Default: [5, 5]
+  kernel_size: [5, 5]
+
+  # Tolerance applied to the hue channel when matching colors in HSV space.
+  # Range: 0–90. Default: 10
+  hue_offset: 10
+
+  # Tolerance applied to the saturation channel in HSV space.
+  # Range: 0–127. Default: 50
+  saturation_offset: 50
+
+  # Tolerance applied to the value (brightness) channel in HSV space.
+  # Range: 0–127. Default: 50
+  value_offset: 50
+
+# ─────────────────────────────────────────────
+# Clustering — K-Means analysis
+# ─────────────────────────────────────────────
+clustering:
+  # Maximum number of clusters (K) evaluated by the elbow method.
+  # Range: 2–50. Default: 10
+  max_k: 10
+
+  # Random seed for K-Means initialization. Ensures reproducible results.
+  # Default: 42
+  random_state: 42
+
+  # Minimum number of detected objects required to form a valid cluster.
+  # Must be >= 1. Default: 2
+  min_samples_per_cluster: 2
+
+  # When true, silhouette scores are computed as a complementary
+  # validation metric alongside the elbow method.
+  # Default: true
+  compute_silhouette: true
+
+# ─────────────────────────────────────────────
+# Paths — input and output directories
+# ─────────────────────────────────────────────
+paths:
+  # Base directory for input image data.
+  # Default: ./data
+  data_dir: ./data
+
+  # Directory where detection and clustering results are written.
+  # Default: ./results
+  results_dir: ./results
+
+  # Directory where generated plots (elbow curves, scatter plots) are saved.
+  # Default: ./plots
+  plots_dir: ./plots
+
+# ─────────────────────────────────────────────
+# Application-level settings
+# ─────────────────────────────────────────────
+
+# Enable debug mode for additional diagnostic output.
+# Default: false
+debug: false
+
+# Logging verbosity. Accepted values: DEBUG, INFO, WARNING, ERROR
+# Default: INFO
+log_level: INFO
+```
+
+## Field reference by section
+
+<AccordionGroup>
+  <Accordion title="detection">
+
+| Field | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `target_color` | string | `"#A98876"` | Hex color | Color used to segment target objects |
+| `min_area` | integer | `50` | ≥ 1 | Minimum contour area in pixels |
+| `max_area` | integer | `5000` | ≥ 1 | Maximum contour area in pixels |
+| `kernel_size` | `[int, int]` | `[5, 5]` | Positive integers | Morphological kernel dimensions |
+| `hue_offset` | integer | `10` | 0–90 | Hue channel tolerance in HSV matching |
+| `saturation_offset` | integer | `50` | 0–127 | Saturation channel tolerance |
+| `value_offset` | integer | `50` | 0–127 | Value (brightness) channel tolerance |
+
+  </Accordion>
+  <Accordion title="clustering">
+
+| Field | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `max_k` | integer | `10` | 2–50 | Maximum clusters evaluated by elbow method |
+| `random_state` | integer | `42` | Any integer | Random seed for reproducibility |
+| `min_samples_per_cluster` | integer | `2` | ≥ 1 | Minimum objects per cluster |
+| `compute_silhouette` | boolean | `true` | — | Enable silhouette score computation |
+
+  </Accordion>
+  <Accordion title="paths">
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `data_dir` | path | `./data` | Input data directory |
+| `results_dir` | path | `./results` | Output results directory |
+| `plots_dir` | path | `./plots` | Output plots directory |
+
+  </Accordion>
+  <Accordion title="top-level">
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `debug` | boolean | `false` | Enable debug mode |
+| `log_level` | string | `"INFO"` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+
+  </Accordion>
+</AccordionGroup>
+
+## Minimal configuration example
+
+You only need to specify values that differ from the defaults. A common minimal config to adjust detection color and output directories:
+
+```yaml config.yaml
+detection:
+  target_color: "#8B6347"
+  min_area: 100
+  max_area: 8000
+
+paths:
+  data_dir: ./dataset/raw
+  results_dir: ./output
+```
+
+## Saving a config from Python
+
+You can also generate a config file programmatically using the `AppConfig.to_yaml()` method:
+
+```python
+from pathlib import Path
+from archeo_cluster.models.config import AppConfig
+
+config = AppConfig()
+config.to_yaml(Path("config.yaml"))
+```
+
+This writes all fields (including defaults) to `config.yaml`, which you can then edit as needed.
+
+<Warning>
+If the YAML file contains invalid values (for example, `max_k` outside the 2–50 range), Archeo-Cluster logs a warning and falls back to built-in defaults rather than raising an error.
+</Warning>

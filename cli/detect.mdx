@@ -1,0 +1,112 @@
+---
+title: "detect"
+description: "Detect archaeological objects in images using color segmentation."
+---
+
+The `detect` command processes a directory of images, isolates objects that match a target color using HSV-space segmentation, and extracts geometric features for each detected contour.
+
+## Syntax
+
+```bash
+./run-cli detect --input-dir <path> [options]
+```
+
+## Options
+
+<ParamField path="--input-dir" type="string" required>
+  Directory containing the input images to process. Short alias: `-i`.
+</ParamField>
+
+<ParamField path="--output-dir" type="string">
+  Write results to this directory instead of creating a session (legacy mode). Short alias: `-o`.
+
+  When this flag is set, no session is created and the `features.csv` file is written to the parent of this directory.
+</ParamField>
+
+<ParamField path="--session" type="string">
+  Create or resume a named session. Short alias: `-s`.
+
+  When provided, results are stored under the centralized session directory using the given name. If neither `--session` nor `--output-dir` is set, a session is created automatically using the input directory name.
+</ParamField>
+
+<ParamField path="--color" type="string" default="#A98876">
+  Target color for segmentation in hexadecimal format. Short alias: `-c`.
+
+  Objects whose dominant color falls within the HSV range derived from this hex value are selected as detections.
+</ParamField>
+
+<ParamField path="--min-area" type="number" default="50">
+  Minimum contour area in pixels. Contours smaller than this value are discarded.
+</ParamField>
+
+<ParamField path="--max-area" type="number" default="5000">
+  Maximum contour area in pixels. Contours larger than this value are discarded.
+</ParamField>
+
+## Output files
+
+The command produces two categories of output:
+
+| File | Description |
+|------|-------------|
+| `features.csv` | One row per detected object with columns: `image`, `area`, `perimeter`, `centroid_x`, `centroid_y`, `circularity`, `aspect_ratio`, `cluster` |
+| Detection images | A copy of each input image annotated with contour overlays, saved to the detection images directory of the session |
+
+## Session vs. legacy output mode
+
+<Tabs>
+  <Tab title="Session mode (recommended)">
+    Omit `--output-dir` to use session-based storage. A session directory is created automatically under the centralized storage location, or you can name it explicitly with `--session`.
+
+    ```bash
+    # Auto-named session based on the input directory name
+    ./run-cli detect -i ./dataset
+
+    # Named session
+    ./run-cli detect -i ./dataset --session site-2025
+    ```
+
+    Session output layout:
+
+    ```
+    <storage>/<session-name>/
+    ├── features.csv
+    ├── detection/          ← annotated images
+    └── metadata.json
+    ```
+  </Tab>
+  <Tab title="Legacy mode">
+    Pass `--output-dir` to write results directly to a specific directory. No session metadata is created.
+
+    ```bash
+    ./run-cli detect -i ./dataset -o ./results
+    ```
+
+    Legacy output layout:
+
+    ```
+    ./results/              ← annotated images
+    features.csv            ← written to the parent of --output-dir
+    ```
+
+    <Warning>
+      Legacy mode does not record session metadata. The `sessions` command will not list these results.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Examples
+
+```bash
+# Detect with all defaults — session auto-created from directory name
+./run-cli detect -i ./data/raw/images
+
+# Custom target color and area bounds
+./run-cli detect -i ./data/raw/images --color "#C4A882" --min-area 100 --max-area 3000
+
+# Named session for reproducibility
+./run-cli detect -i ./data/raw/images --session excavation-site-a
+
+# Legacy output to a specific directory
+./run-cli detect -i ./data/raw/images -o ./output/detection
+```

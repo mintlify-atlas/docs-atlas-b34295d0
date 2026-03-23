@@ -1,0 +1,30 @@
+---
+title: "Changelog"
+description: "Version history and release notes for Archeo-Cluster."
+---
+
+<Note>
+  This project follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+</Note>
+
+## Unreleased
+
+No unreleased changes at this time.
+
+---
+
+## 0.1.0 — 2025-03-20
+
+### Added
+
+- Initial release of archeo-cluster archaeological image analysis tool
+- Object detection module with color-based segmentation using OpenCV
+- Feature extraction for area, perimeter, centroid, circularity, and aspect ratio
+- K-Means clustering with automatic optimal K selection using elbow method
+- Spatial analysis with Average Nearest Neighbor (ANN) index for distribution patterns
+- GeoJSON export for QGIS compatibility
+- Session management for centralized storage of analysis results
+- CLI interface with `detect`, `cluster`, `analyze`, `pipeline`, and `sessions` commands
+- Python API for programmatic access to all functionality
+- Configuration via YAML files or environment variables
+- Comprehensive test suite with pytest

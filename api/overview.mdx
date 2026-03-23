@@ -1,0 +1,91 @@
+---
+title: "Python API Overview"
+description: "Use Archeo-Cluster programmatically from Python scripts and notebooks."
+---
+
+The Python API gives you direct access to every stage of the Archeo-Cluster pipeline — detection, clustering, and spatial analysis — from your own scripts and notebooks without going through the CLI.
+
+## Installation
+
+```bash
+git clone https://github.com/kevingarcia/archeo-cluster.git
+cd archeo-cluster
+uv sync
+```
+
+## Quick example
+
+The following snippet runs the full three-stage pipeline in Python:
+
+```python
+from archeo_cluster.core.detection import ObjectDetector
+from archeo_cluster.core.clustering import KMeansAnalyzer
+from archeo_cluster.core.spatial import run_spatial_analysis
+from archeo_cluster.models import DetectionConfig, ClusteringConfig
+
+# Stage 1 — detect objects
+config = DetectionConfig(target_color="#A98876", min_area=50, max_area=5000)
+detector = ObjectDetector(config)
+batch = detector.process_directory("./data/raw/images", "./output")
+print(f"Detected {batch.total_objects} objects across {batch.image_count} images")
+
+# Stage 2 — cluster features
+analyzer = KMeansAnalyzer(ClusteringConfig(max_k=10))
+clusters = analyzer.process_features_csv("./output/features.csv", "./clusters")
+print(f"Found {clusters.total_clusters} clusters across {clusters.image_count} images")
+
+# Stage 3 — spatial analysis
+desc_stats, ann_results = run_spatial_analysis(
+    "./clusters/image/image_clustered.csv",
+    output_dir="./plots",
+)
+for ann in ann_results:
+    print(f"Cluster {ann.cluster_id}: R={ann.r_index} ({ann.interpretation})")
+```
+
+## Module layout
+
+| Module | Class / function | Purpose |
+|---|---|---|
+| `archeo_cluster.core.detection` | `ObjectDetector` | Color-based object detection with OpenCV |
+| `archeo_cluster.core.clustering` | `KMeansAnalyzer` | K-Means clustering with elbow and silhouette methods |
+| `archeo_cluster.core.spatial` | `run_spatial_analysis` | ANN index computation and GeoJSON export |
+| `archeo_cluster.models` | All Pydantic models | Configuration and result data structures |
+
+### `archeo_cluster.core.detection`
+
+Provides `ObjectDetector` along with lower-level helpers exported from the same package:
+
+- `find_contours`, `filter_contours`, `draw_contours` — contour processing
+- `extract_features`, `extract_features_batch`, `calculate_centroid` — feature extraction
+
+### `archeo_cluster.core.clustering`
+
+Provides `KMeansAnalyzer` along with standalone functions:
+
+- `elbow_method`, `compute_inertias`, `find_optimal_k` — elbow K selection
+- `silhouette_method`, `compute_silhouette_scores`, `find_optimal_k_silhouette` — silhouette K selection
+- `plot_elbow`, `plot_silhouette`, `plot_cluster_distribution`, `plot_morphological_scatter` — visualizations
+- `draw_clustered_centroids`, `draw_cluster_groups` — image overlays
+
+### `archeo_cluster.core.spatial`
+
+Provides `run_spatial_analysis` and lower-level helpers:
+
+- `compute_ann_index`, `generate_descriptive_stats` — statistics
+- `plot_ann_results`, `plot_boxplots` — visualizations
+- `export_to_geojson`, `export_clusters_to_geojson` — GeoJSON export
+- `ImageReference` — pixel-to-geographic coordinate conversion
+
+## When to use the Python API vs. the CLI
+
+| Use the **Python API** when… | Use the **CLI** when… |
+|---|---|
+| You need results as Python objects for further processing | You want a one-command analysis with no code |
+| You are running from a Jupyter notebook | You are integrating with shell scripts or CI pipelines |
+| You want to customise intermediate steps or visualisations | Default outputs (CSV, PNG, GeoJSON) are sufficient |
+| You need to load configuration programmatically | You prefer `config.yaml` and environment variables |
+
+<Note>
+All public classes accept `Path | str` wherever a file or directory path is required, so you can pass either type freely.
+</Note>

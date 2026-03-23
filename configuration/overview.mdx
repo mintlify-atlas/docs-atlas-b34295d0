@@ -1,0 +1,112 @@
+---
+title: "Configuration Overview"
+description: "Configure Archeo-Cluster via YAML files, environment variables, or CLI flags."
+---
+
+Archeo-Cluster supports three ways to configure its behavior. Settings are resolved in a defined precedence order, so you can mix approaches — for example, committing a shared `config.yaml` while overriding specific values with environment variables in CI.
+
+## Configuration methods
+
+<CardGroup cols={3}>
+  <Card title="CLI flags" icon="terminal">
+    Pass options directly to each command. Highest priority — always overrides other sources.
+  </Card>
+  <Card title="Environment variables" icon="code">
+    Set `ARCHEO_*` variables in your shell or process environment. Override YAML and defaults.
+  </Card>
+  <Card title="YAML file" icon="file">
+    Place a `config.yaml` (or `config.yml` / `.archeo-cluster.yaml`) in your project directory.
+  </Card>
+</CardGroup>
+
+## Precedence order
+
+When the same setting is supplied from multiple sources, Archeo-Cluster applies the following priority (highest to lowest):
+
+1. **CLI flags** — values passed directly on the command line
+2. **Environment variables** — `ARCHEO_*` variables in the process environment
+3. **YAML config file** — the first matching file found during directory traversal
+4. **Built-in defaults** — hardcoded defaults from the application models
+
+<Note>
+Environment variable overrides are only applied when no YAML config file is found. If a config file is loaded successfully, environment variables for that session are ignored.
+</Note>
+
+## Config file lookup
+
+Archeo-Cluster searches for a configuration file starting from the **current working directory** and walking up to each parent directory in turn. The first matching filename wins.
+
+Filenames checked (in order):
+
+```
+config.yaml
+config.yml
+.archeo-cluster.yaml
+```
+
+<Steps>
+  <Step title="Check current directory">
+    Archeo-Cluster looks for each filename in the directory where you run the command.
+  </Step>
+  <Step title="Walk up to parent directories">
+    If no file is found, it repeats the search in each parent directory until the filesystem root.
+  </Step>
+  <Step title="Fall back to defaults and env vars">
+    If no file is found anywhere in the hierarchy, the app starts with built-in defaults and applies any `ARCHEO_*` environment variables.
+  </Step>
+</Steps>
+
+<Tip>
+Place `config.yaml` in your project root so it is picked up regardless of which subdirectory you run commands from.
+</Tip>
+
+## Default configuration values
+
+The table below lists all settings and their built-in defaults.
+
+### Detection
+
+| Field | Default | Description |
+|---|---|---|
+| `detection.target_color` | `"#A98876"` | Target color in hex format |
+| `detection.min_area` | `50` | Minimum contour area in pixels |
+| `detection.max_area` | `5000` | Maximum contour area in pixels |
+| `detection.kernel_size` | `[5, 5]` | Morphological operation kernel size |
+| `detection.hue_offset` | `10` | Hue tolerance for HSV color matching (0–90) |
+| `detection.saturation_offset` | `50` | Saturation tolerance for HSV color matching (0–127) |
+| `detection.value_offset` | `50` | Value tolerance for HSV color matching (0–127) |
+
+### Clustering
+
+| Field | Default | Description |
+|---|---|---|
+| `clustering.max_k` | `10` | Maximum clusters evaluated by the elbow method |
+| `clustering.random_state` | `42` | Random seed for reproducibility |
+| `clustering.min_samples_per_cluster` | `2` | Minimum samples required to form a cluster |
+| `clustering.compute_silhouette` | `true` | Compute silhouette scores alongside the elbow method |
+
+### Paths
+
+| Field | Default | Description |
+|---|---|---|
+| `paths.data_dir` | `./data` | Base directory for input data |
+| `paths.results_dir` | `./results` | Directory for output results |
+| `paths.plots_dir` | `./plots` | Directory for generated plots |
+
+### Application
+
+| Field | Default | Description |
+|---|---|---|
+| `debug` | `false` | Enable debug mode |
+| `log_level` | `"INFO"` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="YAML configuration" icon="file-code" href="/configuration/yaml-config">
+    Full annotated example covering every available field.
+  </Card>
+  <Card title="Environment variables" icon="terminal" href="/configuration/environment-variables">
+    Reference for all supported `ARCHEO_*` environment variables.
+  </Card>
+</CardGroup>

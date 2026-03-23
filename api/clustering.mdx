@@ -1,0 +1,252 @@
+---
+title: "Clustering API"
+description: "API reference for KMeansAnalyzer and related classes."
+---
+
+The clustering module groups detected objects by their geometric features using K-Means. Optimal K is selected automatically via the elbow method (WCSS) with optional silhouette score validation.
+
+```python
+from archeo_cluster.core.clustering import KMeansAnalyzer
+from archeo_cluster.models import ClusteringConfig
+```
+
+---
+
+## `KMeansAnalyzer`
+
+K-Means clustering analyzer for archaeological feature data.
+
+```python
+analyzer = KMeansAnalyzer(
+    config=ClusteringConfig(max_k=10, random_state=42),
+    feature_columns=["area", "perimeter", "circularity", "aspect_ratio", "solidity", "extent"],
+)
+```
+
+### Constructor
+
+<ParamField path="config" type="ClusteringConfig" default="ClusteringConfig()">
+  Clustering configuration. Controls the maximum K to evaluate, random seed, minimum samples per cluster, and whether silhouette scores are computed.
+</ParamField>
+
+<ParamField path="feature_columns" type="list[str]" default="['area', 'perimeter', 'circularity', 'aspect_ratio', 'solidity', 'extent']">
+  Column names from the features CSV to use as input features for clustering. Centroid coordinates are excluded by default because they are spatial, not morphological.
+</ParamField>
+
+---
+
+### `process_features_csv`
+
+Process a features CSV file and perform per-image K-Means clustering. This is the primary entry point for the clustering stage.
+
+```python
+batch = analyzer.process_features_csv(
+    csv_path="./output/features.csv",
+    output_dir="./clusters",
+    images_dir="./output",   # optional, enables cluster overlay visualizations
+)
+print(f"{batch.total_clusters} clusters across {batch.image_count} images")
+```
+
+For each image the method:
+1. Runs the elbow method to find optimal K.
+2. Optionally runs silhouette analysis for validation.
+3. Fits K-Means and assigns cluster labels.
+4. Writes `<image>_clustered.csv`, `elbow_method.png`, `silhouette_analysis.png`, `cluster_distribution.png`, and `morphological_scatter.png` to `output_dir/<image>/`.
+
+**Parameters**
+
+<ParamField path="csv_path" type="Path | str" required>
+  Path to the features CSV produced by the detection stage. Must contain `image_filename` plus all columns listed in `feature_columns`.
+</ParamField>
+
+<ParamField path="output_dir" type="Path | str" required>
+  Directory where per-image subdirectories of results are written. Created automatically if it does not exist.
+</ParamField>
+
+<ParamField path="images_dir" type="Path | str | None" default="None">
+  Optional path to the directory of processed images saved by the detection stage. When provided, cluster overlay visualizations are written alongside the other outputs.
+</ParamField>
+
+**Returns** `BatchClusteringResult`
+
+---
+
+### `cluster_single_image`
+
+Perform clustering on a single image's feature DataFrame without any file I/O.
+
+```python
+import pandas as pd
+
+df = pd.read_csv("./output/features.csv")
+image_df = df[df["image_filename"] == "photo"].copy()
+result = analyzer.cluster_single_image(image_df, image_name="photo")
+if result:
+    print(f"Optimal K = {result.optimal_k}")
+```
+
+**Parameters**
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame containing feature rows for a single image. Must include all columns in `feature_columns`.
+</ParamField>
+
+<ParamField path="image_name" type="str" required>
+  Name of the image used in logging and stored in the returned `ClusteringResult`.
+</ParamField>
+
+**Returns** `ClusteringResult | None` — `None` if the image has fewer rows than `config.min_samples_per_cluster`.
+
+---
+
+## `ClusteringConfig`
+
+Pydantic model holding all clustering parameters.
+
+```python
+from archeo_cluster.models import ClusteringConfig
+
+config = ClusteringConfig(
+    max_k=10,
+    random_state=42,
+    min_samples_per_cluster=2,
+    compute_silhouette=True,
+)
+```
+
+<ResponseField name="max_k" type="int" default="10">
+  Maximum number of clusters to evaluate in the elbow method. Must be between 2 and 50 inclusive.
+</ResponseField>
+
+<ResponseField name="random_state" type="int" default="42">
+  Random seed passed to K-Means for reproducible results.
+</ResponseField>
+
+<ResponseField name="min_samples_per_cluster" type="int" default="2">
+  Minimum number of samples required to attempt clustering on an image. Images with fewer samples are skipped. Must be ≥ 1.
+</ResponseField>
+
+<ResponseField name="compute_silhouette" type="bool" default="True">
+  When `True`, silhouette scores are computed as a complementary validation metric alongside the elbow method. Adds computation time but provides an independent K quality signal.
+</ResponseField>
+
+---
+
+## Return types
+
+### `ClusteringResult`
+
+Result of K-Means clustering on a single image. This is a dataclass.
+
+<ResponseField name="image_name" type="str" required>
+  Name of the source image.
+</ResponseField>
+
+<ResponseField name="optimal_k" type="int" required>
+  Optimal number of clusters determined by the elbow method.
+</ResponseField>
+
+<ResponseField name="labels" type="list[int]" default="[]">
+  Cluster assignment (0-based index) for each object row in the input DataFrame.
+</ResponseField>
+
+<ResponseField name="clusters" type="list[ClusterInfo]" default="[]">
+  Summary statistics for each cluster.
+  <Expandable title="ClusterInfo fields">
+    <ResponseField name="cluster_id" type="int" required>
+      Zero-based cluster identifier.
+    </ResponseField>
+    <ResponseField name="size" type="int" required>
+      Number of objects assigned to this cluster.
+    </ResponseField>
+    <ResponseField name="centroid_x" type="float" required>
+      Mean X coordinate of objects in this cluster.
+    </ResponseField>
+    <ResponseField name="centroid_y" type="float" required>
+      Mean Y coordinate of objects in this cluster.
+    </ResponseField>
+    <ResponseField name="mean_area" type="float" required>
+      Average area (pixels) of objects in this cluster.
+    </ResponseField>
+    <ResponseField name="mean_perimeter" type="float" required>
+      Average perimeter (pixels) of objects in this cluster.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="elbow_result" type="ElbowResult | None" default="None">
+  Output from the elbow method analysis.
+  <Expandable title="ElbowResult fields">
+    <ResponseField name="k_values" type="list[int]" required>
+      K values that were evaluated (e.g. `[1, 2, 3, ..., max_k]`).
+    </ResponseField>
+    <ResponseField name="inertias" type="list[float]" required>
+      Within-cluster sum of squares (WCSS) for each K value.
+    </ResponseField>
+    <ResponseField name="optimal_k" type="int" required>
+      The K at the elbow point, as detected by `kneed.KneeLocator`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="silhouette_result" type="SilhouetteResult | None" default="None">
+  Output from silhouette score analysis. `None` when `ClusteringConfig.compute_silhouette` is `False` or computation failed.
+  <Expandable title="SilhouetteResult fields">
+    <ResponseField name="k_values" type="list[int]" required>
+      K values that were evaluated.
+    </ResponseField>
+    <ResponseField name="silhouette_scores" type="list[float | None]" required>
+      Silhouette coefficient for each K. `None` for K=1 (undefined for a single cluster) and for any K that exceeded the sample count.
+    </ResponseField>
+    <ResponseField name="optimal_k" type="int | None" default="None">
+      K with the highest silhouette score. `None` if computation was not possible. Must be ≥ 2 when set.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="cluster_count" type="int">
+  Read-only property. Number of clusters in `clusters`.
+</ResponseField>
+
+---
+
+### `BatchClusteringResult`
+
+Aggregated results from clustering all images in a features CSV. This is a dataclass.
+
+<ResponseField name="results" type="list[ClusteringResult]" default="[]">
+  One `ClusteringResult` per image that had enough samples to cluster.
+</ResponseField>
+
+<ResponseField name="image_count" type="int">
+  Read-only property. Number of images in `results`.
+</ResponseField>
+
+<ResponseField name="total_clusters" type="int">
+  Read-only property. Sum of `cluster_count` across all results.
+</ResponseField>
+
+---
+
+### `ClusterInfo`
+
+Summary statistics for a single cluster. See the expandable in `ClusteringResult.clusters` above for field descriptions.
+
+---
+
+### `ElbowResult`
+
+Result of the elbow method analysis. See the expandable in `ClusteringResult.elbow_result` above.
+
+---
+
+### `SilhouetteResult`
+
+Result of silhouette score analysis. Silhouette coefficient ranges from -1 (poor separation) to 1 (perfect separation). The optimal K is selected by maximising the score.
+
+See the expandable in `ClusteringResult.silhouette_result` above for field descriptions.
+
+<Note>
+Silhouette score is undefined for K=1 (only one cluster), so `silhouette_scores[0]` is always `None` when K=1 is included in the evaluated range.
+</Note>

@@ -1,0 +1,175 @@
+---
+title: "GeoJSON Export"
+description: "Export analysis results to GeoJSON for use in QGIS and other GIS tools."
+---
+
+After clustering, every detected artifact can be exported as a GeoJSON `FeatureCollection`. Each artifact becomes a `Point` feature carrying its full set of morphological attributes and cluster assignment as properties.
+
+## What gets exported
+
+The exporter iterates over the rows of a `_clustered.csv` file. For each row it creates one GeoJSON `Point` feature whose coordinates come from `centroid_x` / `centroid_y` and whose properties include every other column in the CSV:
+
+| Property | Source column | Type |
+|----------|--------------|------|
+| `image_filename` | detection output | string |
+| `contour_index` | detection output | integer |
+| `area` | `extract_features` | float |
+| `perimeter` | `extract_features` | float |
+| `circularity` | `extract_features` | float |
+| `aspect_ratio` | `extract_features` | float |
+| `solidity` | `extract_features` | float |
+| `extent` | `extract_features` | float |
+| `cluster` | K-Means label | integer |
+
+The `centroid_x` and `centroid_y` columns are consumed as coordinates and are **not** duplicated in the properties object.
+
+---
+
+## GeoJSON file structure
+
+```json
+{
+  "type": "FeatureCollection",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "Simple Cartesian / Pixel Space (Local Coordinates)"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [412.0, 287.0]
+      },
+      "properties": {
+        "image_filename": "trench_01",
+        "contour_index": 0,
+        "area": 342.5,
+        "perimeter": 78.3,
+        "circularity": 0.702,
+        "aspect_ratio": 1.14,
+        "solidity": 0.891,
+        "extent": 0.654,
+        "cluster": 2
+      }
+    }
+  ]
+}
+```
+
+The `crs` name field is set to `"Simple Cartesian / Pixel Space (Local Coordinates)"` when no georeferencing is provided. When an `ImageReference` is supplied with a real CRS string, that string replaces it.
+
+---
+
+## Exporting from the Python API
+
+Use `export_clusters_to_geojson` to go directly from a clustered CSV file:
+
+```python
+from archeo_cluster.core.spatial.geojson import export_clusters_to_geojson
+
+export_clusters_to_geojson(
+    csv_path="./session/clustering/trench_01/trench_01_clustered.csv",
+    output_path="./output/trench_01.geojson",
+)
+```
+
+Or call `export_to_geojson` with a DataFrame if you have one already loaded:
+
+```python
+import pandas as pd
+from archeo_cluster.core.spatial.geojson import export_to_geojson
+
+df = pd.read_csv("./session/clustering/trench_01/trench_01_clustered.csv")
+export_to_geojson(df, "./output/trench_01.geojson")
+```
+
+---
+
+## Coordinate system considerations
+
+By default, coordinates in the exported GeoJSON are **pixel coordinates** (origin at the top-left of the image, Y increases downward). This is fine for intra-site visualization but will not align with real-world map layers in QGIS without georeferencing.
+
+### Georeferencing with `ImageReference`
+
+If you have a world file or known ground control points for your image, supply an `ImageReference` to convert pixel coordinates to real-world ones:
+
+```python
+from archeo_cluster.core.spatial.geojson import (
+    ImageReference,
+    export_clusters_to_geojson,
+)
+
+# Example: image origin at UTM (500000, 1620000), 0.05 m/pixel
+ref = ImageReference(
+    origin_x=500000.0,    # easting of top-left pixel centre
+    origin_y=1620000.0,   # northing of top-left pixel centre
+    pixel_size_x=0.05,    # metres per pixel in X
+    pixel_size_y=0.05,    # metres per pixel in Y
+    crs="EPSG:32616",     # UTM Zone 16N
+)
+
+export_clusters_to_geojson(
+    csv_path="./session/clustering/trench_01/trench_01_clustered.csv",
+    output_path="./output/trench_01_georef.geojson",
+    image_reference=ref,
+)
+```
+
+The conversion formula applied by `ImageReference.pixel_to_geo` is:
+
+```python
+def pixel_to_geo(self, pixel_x: float, pixel_y: float) -> tuple[float, float]:
+    geo_x = self.origin_x + (pixel_x * self.pixel_size_x)
+    geo_y = self.origin_y - (pixel_y * self.pixel_size_y)  # Y inverted
+    return geo_x, geo_y
+```
+
+Y is subtracted because image coordinates increase downward while geographic northings increase upward.
+
+<Warning>
+  If you export without an `ImageReference`, a warning is logged: _"Exporting GeoJSON without georeferencing. Coordinates are in pixel space, not geographic CRS."_ The file is still valid GeoJSON but will not overlay correctly on basemaps.
+</Warning>
+
+---
+
+## Importing into QGIS
+
+<Steps>
+  <Step title="Open the GeoJSON file">
+    In QGIS, go to **Layer → Add Layer → Add Vector Layer** (or drag the `.geojson` file directly into the Layers panel). QGIS auto-detects the GeoJSON format.
+  </Step>
+
+  <Step title="Set the coordinate reference system">
+    If you exported with an `ImageReference` and a real CRS (e.g. `EPSG:32616`), QGIS should pick it up automatically. For pixel-space exports, the layer will load but will need a custom CRS or manual placement.
+  </Step>
+
+  <Step title="Style by cluster">
+    Open **Layer Properties → Symbology**. Set the renderer to **Categorized** and choose `cluster` as the column. Click **Classify** to assign a distinct color to each cluster value. This gives you an immediate visual breakdown of artifact groupings across the excavation area.
+  </Step>
+
+  <Step title="Use attribute filters">
+    Use the **Select by Expression** tool or the **Query Builder** to filter to a single cluster or a range of morphological values, for example:
+
+    ```sql
+    "cluster" = 2 AND "circularity" > 0.7
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Using cluster information as attributes
+
+Because every morphological feature is preserved as a GeoJSON property, you can use them all inside QGIS:
+
+- **Graduated color by `area`** to visualize size distribution across the site
+- **Label features** with `cluster` or `circularity` using the Label tab
+- **Spatial joins** between the artifact layer and a context polygon layer (e.g. excavation trenches)
+- **Heatmaps** based on point density within each cluster using QGIS's built-in heatmap renderer
+
+<Tip>
+  Export one GeoJSON file per image (one image = one excavation context) and load them as separate layers in QGIS. Colour-code layers by context to compare artifact distributions across the site.
+</Tip>

@@ -1,0 +1,307 @@
+---
+title: "Development Guide"
+description: "Set up a development environment and contribute to Archeo-Cluster."
+---
+
+## Prerequisites
+
+Before you begin, make sure you have the following installed:
+
+- **Python 3.11 or higher** — required for all development work
+- **[uv](https://docs.astral.sh/uv/)** — the recommended package manager for this project
+- **git** — for version control and submitting pull requests
+
+## Setting up your environment
+
+<Steps>
+  <Step title="Fork and clone the repository">
+    Fork the repository on GitHub, then clone your fork locally:
+
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/archeo-cluster.git
+    cd archeo-cluster
+    ```
+  </Step>
+
+  <Step title="Install dev dependencies">
+    Install all dependencies including the `dev` extras:
+
+    ```bash
+    uv sync --extra dev
+    ```
+
+    <Note>
+      The `dev` extras include pytest, ruff, mypy, pre-commit, and type stubs. See `pyproject.toml` for the full list.
+    </Note>
+
+    Alternatively, using pip:
+
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+    pip install -e ".[dev]"
+    ```
+  </Step>
+
+  <Step title="Install pre-commit hooks">
+    Set up the pre-commit hooks so linting and formatting run automatically before each commit:
+
+    ```bash
+    uv run pre-commit install
+    ```
+
+    The pre-commit configuration runs ruff (lint and format), mypy, and a set of general file checks on every commit.
+  </Step>
+
+  <Step title="Verify your installation">
+    Run all checks to confirm everything is working:
+
+    ```bash
+    make check
+    ```
+
+    This runs linting, type checking, and the full test suite.
+  </Step>
+</Steps>
+
+## Project structure
+
+```
+src/archeo_cluster/
+├── cli/           # Typer CLI commands
+├── core/          # Business logic
+│   ├── detection/ # OpenCV object detection
+│   ├── clustering/# K-Means analysis
+│   ├── spatial/   # Spatial statistics
+│   └── output/    # Session management and storage
+├── models/        # Pydantic models
+├── utils/         # Shared utilities
+└── config/        # Configuration management
+tests/
+├── unit/          # Unit tests (mirror src structure)
+├── integration/   # Integration tests
+└── conftest.py    # Shared pytest fixtures
+```
+
+## Running tests
+
+<CodeGroup>
+
+```bash Run all tests
+uv run pytest
+```
+
+```bash Run unit tests only
+uv run pytest tests/unit/
+```
+
+```bash Run with coverage
+uv run pytest --cov=src/archeo_cluster --cov-report=html --cov-report=term-missing
+```
+
+```bash Run a specific test file
+uv run pytest tests/unit/test_detection.py
+```
+
+```bash Run tests matching a pattern
+uv run pytest -k "test_filter"
+```
+
+```bash Stop on first failure
+uv run pytest -x
+```
+
+</CodeGroup>
+
+<Tip>
+  The default pytest configuration in `pyproject.toml` already enables coverage reporting. Running `uv run pytest` without extra flags will include a coverage summary in the terminal output.
+</Tip>
+
+## Linting and formatting
+
+This project uses [ruff](https://docs.astral.sh/ruff/) for linting and formatting, and [mypy](https://mypy.readthedocs.io/) for static type checking.
+
+<CodeGroup>
+
+```bash Lint (ruff + mypy)
+make lint
+```
+
+```bash Format code
+make format
+```
+
+```bash Type check only
+uv run mypy src
+```
+
+```bash Run all checks
+make check
+```
+
+</CodeGroup>
+
+### Make targets reference
+
+| Target | Description |
+| --- | --- |
+| `make install` | Install dependencies with uv |
+| `make test` | Run tests with pytest |
+| `make lint` | Run ruff and mypy |
+| `make format` | Format and auto-fix with ruff |
+| `make check` | Run lint then test |
+| `make clean` | Remove build artifacts and caches |
+| `make build` | Build the package |
+
+## Code style guidelines
+
+### Import order
+
+Always follow this import grouping order:
+
+```python
+"""Module docstring describing purpose."""
+
+from __future__ import annotations       # Always first
+
+import logging                            # Standard library
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import cv2                                # Third-party
+import numpy as np
+
+from archeo_cluster.models import Config  # First-party (archeo_cluster.*)
+
+if TYPE_CHECKING:                         # Type-only imports last
+    from numpy.typing import NDArray
+
+logger = logging.getLogger(__name__)      # Module-level logger
+```
+
+<Note>
+  Always use `from __future__ import annotations` as the very first import. Use absolute imports (`from archeo_cluster.models import X`), and avoid star imports.
+</Note>
+
+### Type annotations
+
+All functions must have complete type hints:
+
+- Use `str | None` instead of `Optional[str]`
+- Use `list[str]` instead of `List[str]` (built-in generics)
+- Use `NDArray[np.uint8]` for NumPy arrays
+- Use Pydantic models for configuration and data transfer
+
+mypy is configured in strict mode — all unannotated functions will fail the type check.
+
+### Google-style docstrings
+
+```python
+def process_image(
+    image: NDArray[np.uint8],
+    config: DetectionConfig,
+) -> DetectionResult:
+    """Process an image and detect archaeological objects.
+
+    Args:
+        image: Input image in BGR format.
+        config: Detection configuration parameters.
+
+    Returns:
+        DetectionResult containing detected objects and features.
+
+    Raises:
+        ValueError: If image is empty or has invalid dimensions.
+    """
+```
+
+### Naming conventions
+
+| Kind | Convention | Example |
+| --- | --- | --- |
+| Classes | PascalCase | `ObjectDetector`, `DetectionConfig` |
+| Functions and methods | snake_case | `filter_contours`, `extract_features` |
+| Variables | snake_case | `image_path`, `cluster_count` |
+| Constants | UPPER_SNAKE_CASE | `CLUSTER_COLORS`, `SUPPORTED_EXTENSIONS` |
+| Private members | Single underscore prefix | `_save_intermediate_images` |
+
+### Path handling
+
+Always use `pathlib.Path` — never string concatenation for file paths:
+
+```python
+# Correct
+output_dir = Path("results") / "session_01"
+output_dir.mkdir(parents=True, exist_ok=True)
+
+# Incorrect
+output_dir = "results/" + "session_01"
+```
+
+### Logging
+
+Use the `logging` module instead of `print()`:
+
+```python
+# Correct
+logger = logging.getLogger(__name__)
+logger.info("Processing image: %s", image_path)
+
+# Incorrect
+print(f"Processing image: {image_path}")
+```
+
+## Pull request guidelines
+
+<Steps>
+  <Step title="Create a feature branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+  </Step>
+
+  <Step title="Make your changes">
+    Write clear, atomic commits. Follow [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+    | Prefix | Use for |
+    | --- | --- |
+    | `feat:` | New feature |
+    | `fix:` | Bug fix |
+    | `docs:` | Documentation changes |
+    | `refactor:` | Code refactoring (no functional changes) |
+    | `test:` | Adding or updating tests |
+    | `chore:` | Maintenance tasks |
+
+    **Examples:**
+    ```
+    feat: add CSV export for clustering results
+    fix: handle zero-area contours in centroid calculation
+    docs: update installation instructions for uv
+    refactor: extract color conversion to utility module
+    test: add unit tests for elbow method
+    ```
+  </Step>
+
+  <Step title="Ensure all checks pass">
+    ```bash
+    make check
+    ```
+  </Step>
+
+  <Step title="Push and open a pull request">
+    Push your branch and create a pull request on GitHub. Fill out the PR template completely and address review feedback promptly.
+  </Step>
+</Steps>
+
+## Reporting issues
+
+<CardGroup cols={2}>
+  <Card title="Bug reports" icon="bug">
+    Include your Python version, operating system, package version (`archeo-cluster --version`), steps to reproduce, expected vs actual behavior, and any error tracebacks.
+  </Card>
+  <Card title="Feature requests" icon="lightbulb">
+    Describe the use case, your proposed solution if any, and alternatives you have considered.
+  </Card>
+</CardGroup>
+
+Open a [Discussion](https://github.com/kevingarcia/archeo-cluster/discussions) for questions, or an [Issue](https://github.com/kevingarcia/archeo-cluster/issues) for bugs and feature requests.

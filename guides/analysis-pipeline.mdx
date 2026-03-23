@@ -1,0 +1,188 @@
+---
+title: "Analysis Pipeline"
+description: "Understand the full detect → cluster → analyze pipeline and how to run it end-to-end."
+---
+
+Archeo-Cluster processes archaeological imagery through a three-stage pipeline: color-based object detection, K-Means clustering, and spatial analysis. Each stage produces its own output files, and the whole sequence can be run in a single command.
+
+## Pipeline overview
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Images    │ -> │  Detection  │ -> │  Clustering │ -> │  Analysis   │
+│             │    │  (OpenCV)   │    │  (K-Means)  │    │  (Spatial)  │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+                          │                  │                  │
+                          v                  v                  v
+                    features.csv      clustered.csv      statistics
+                    contours.png      elbow_plot.png     ann_index
+```
+
+All outputs are written to a **session directory** so nothing is overwritten between runs. See [Session Management](/guides/session-management) for details on where sessions are stored.
+
+## Running the full pipeline
+
+The `pipeline` command chains all three stages and stores everything in one session:
+
+```bash
+# Simplest form — session name is derived from the input folder name
+uv run archeo-cluster pipeline --input-dir ./dataset
+
+# Specify a session name and a custom target color
+uv run archeo-cluster pipeline \
+  --input-dir ./dataset \
+  --session "site_a_2025" \
+  --color "#A98876"
+
+# Open the results folder automatically when done
+uv run archeo-cluster pipeline --input-dir ./dataset --open
+```
+
+<Note>
+  The `--open` flag launches the system file manager pointing at the session directory once the pipeline finishes. It is enabled by default.
+</Note>
+
+---
+
+## Stage-by-stage walkthrough
+
+<Steps>
+  <Step title="Stage 1: Object Detection">
+    The `detect` command converts each image to HSV color space, applies a color mask around the target hue, runs morphological operations to clean noise, and extracts contour features.
+
+    ```bash
+    uv run archeo-cluster detect \
+      --input-dir ./dataset \
+      --session "site_a_detection" \
+      --color "#A98876" \
+      --min-area 50 \
+      --max-area 5000
+    ```
+
+    **What gets saved:**
+
+    | File | Description |
+    |------|-------------|
+    | `detection/features.csv` | One row per detected object: `image_filename`, `contour_index`, `area`, `perimeter`, `centroid_x`, `centroid_y`, `circularity`, `aspect_ratio`, `solidity`, `extent` |
+    | `detection/<image>/01_hsv.png` | HSV-converted source image |
+    | `detection/<image>/02_mask_initial.png` | Raw color mask before morphology |
+    | `detection/<image>/03_mask_closed.png` | Mask after `MORPH_CLOSE` |
+    | `detection/<image>/04_mask_morph_final.png` | Mask after `MORPH_OPEN` |
+    | `detection/<image>/05_raw_contours.png` | All contours before area filtering (red) |
+    | `detection/<image>/06_filtered_contours_final.png` | Contours that passed the area filter (green) |
+
+    The session status transitions from `DETECTING` → `DETECTION_DONE` on success.
+  </Step>
+
+  <Step title="Stage 2: K-Means Clustering">
+    The `cluster` command reads `features.csv`, normalises the six morphological features with `StandardScaler`, runs the elbow method to pick the optimal K, and fits a `KMeans` model.
+
+    ```bash
+    uv run archeo-cluster cluster \
+      --input ./session_dir/detection/features.csv \
+      --output-dir ./session_dir/clustering \
+      --max-k 10
+    ```
+
+    **What gets saved** (one sub-directory per image):
+
+    | File | Description |
+    |------|-------------|
+    | `clustering/<image>/<image>_clustered.csv` | `features.csv` with an added `cluster` column |
+    | `clustering/<image>/elbow_method.png` | Inertia vs K with the selected elbow marked |
+    | `clustering/<image>/silhouette_analysis.png` | Silhouette score vs K (when `compute_silhouette=True`) |
+    | `clustering/<image>/cluster_distribution.png` | Scatter of centroid positions coloured by cluster |
+    | `clustering/<image>/morphological_scatter.png` | Area vs circularity scatter coloured by cluster |
+    | `clustering/<image>/clusters_visualization.png` | Centroid overlays on the filtered contours image |
+    | `clustering/<image>/cluster_groups.png` | Rotated bounding rectangles per cluster |
+
+    Features used for clustering: `area`, `perimeter`, `circularity`, `aspect_ratio`, `solidity`, `extent`. Centroid coordinates are **not** used as clustering features — they are preserved for spatial analysis only.
+
+    The session status transitions from `CLUSTERING` → `CLUSTERING_DONE`.
+  </Step>
+
+  <Step title="Stage 3: Spatial Analysis">
+    The `analyze` command reads each `_clustered.csv` file and computes descriptive statistics and the Average Nearest Neighbor (ANN) index for each cluster.
+
+    ```bash
+    uv run archeo-cluster analyze \
+      --input ./session_dir/clustering/image_name/image_name_clustered.csv \
+      --output-dir ./session_dir/analysis/image_name
+    ```
+
+    **What gets saved:**
+
+    | File | Description |
+    |------|-------------|
+    | `analysis/<image>/descriptive_stats.csv` | Per-cluster mean/std/min/max for area and perimeter |
+    | `analysis/<image>/ann_results.csv` | ANN R-index and interpretation (`Clustered` / `Random` / `Dispersed`) per cluster |
+    | `analysis/<image>/ann_results.png` | Bar chart of R-index values with the random baseline (R=1) marked |
+    | `analysis/<image>/spatial_distribution_map.png` | Scatter map of objects by cluster (Y-axis inverted to match image coordinates) |
+    | `analysis/<image>/boxplot_area.png` | Boxplots of morphological features by cluster |
+
+    The session status transitions from `ANALYZING` → `COMPLETED`.
+  </Step>
+</Steps>
+
+---
+
+## Performance metrics
+
+After `pipeline` finishes it prints a metrics table showing how long each stage took and peak memory usage:
+
+```
+─────────────── Performance Summary ────────────────
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+┃ Stage       ┃ Duration (s)  ┃ Peak Memory (MB) ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+│ Detection   │ 1.243         │ 142.3            │
+│ Clustering  │ 0.817         │ 98.7             │
+│ Analysis    │ 0.391         │ 61.2             │
+│ Total       │ 2.451         │ 142.3            │
+└─────────────┴───────────────┴──────────────────┘
+```
+
+The same metrics are persisted in the session's `metadata.json` so you can retrieve them later.
+
+---
+
+## Using the Python API
+
+You can drive the full pipeline from code instead of the CLI:
+
+```python
+from archeo_cluster.core.detection import ObjectDetector
+from archeo_cluster.core.clustering import KMeansAnalyzer
+from archeo_cluster.core.spatial import run_spatial_analysis
+from archeo_cluster.models import DetectionConfig, ClusteringConfig
+import pandas as pd
+
+# Stage 1 — Detection
+detection_config = DetectionConfig(
+    target_color="#A98876",
+    min_area=50,
+    max_area=5000,
+)
+detector = ObjectDetector(config=detection_config)
+batch = detector.process_directory("./dataset", "./output/detection")
+
+# Save features.csv
+df = pd.DataFrame(batch.to_feature_rows())
+df.to_csv("./output/features.csv", index=False)
+
+# Stage 2 — Clustering
+analyzer = KMeansAnalyzer(config=ClusteringConfig(max_k=10))
+clustering = analyzer.process_features_csv(
+    "./output/features.csv",
+    "./output/clustering",
+)
+
+# Stage 3 — Spatial analysis (per image)
+for result in clustering.results:
+    clustered_csv = f"./output/clustering/{result.image_name}/{result.image_name}_clustered.csv"
+    run_spatial_analysis(clustered_csv, f"./output/analysis/{result.image_name}")
+```
+
+<Tip>
+  Set `save_intermediate=False` on `ObjectDetector` if you only need `features.csv` and want to skip writing the step-by-step mask images to disk.
+</Tip>

@@ -1,0 +1,233 @@
+---
+title: "Color Segmentation"
+description: "Configure color-based object detection to isolate archaeological artifacts."
+---
+
+Archeo-Cluster identifies artifacts by their color. The detector converts each image to HSV color space, builds a binary mask for pixels that fall within a tolerance band around the target color, and then finds contours in that mask.
+
+## How HSV color segmentation works
+
+OpenCV's HSV color space separates hue (color type) from saturation (color intensity) and value (brightness). Working in HSV makes it much easier to write tolerant color ranges than in BGR, because lighting changes mostly affect S and V while H stays stable.
+
+The detection pipeline runs these steps in order:
+
+1. Convert image from BGR to HSV with `cv2.cvtColor(image, cv2.COLOR_BGR2HSV)`
+2. Build a binary mask with `cv2.inRange(hsv, lower_bound, upper_bound)`
+3. Apply `MORPH_CLOSE` to fill small holes inside artifacts
+4. Apply `MORPH_OPEN` to remove small noise specks
+5. Find external contours with `cv2.findContours(..., cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)`
+6. Filter contours by pixel area
+7. Extract geometric features from each surviving contour
+
+---
+
+## Choosing the right target color
+
+The `--color` flag (or `target_color` in config) accepts a hex color code. The utility functions in `archeo_cluster.utils.color` handle the conversion chain:
+
+```python
+from archeo_cluster.utils.color import hex_to_bgr, hex_to_hsv, generate_color_range
+
+# Inspect the conversion for a terracotta color
+print(hex_to_bgr("#A98876"))    # (118, 136, 169) — B, G, R
+print(hex_to_hsv("#A98876"))    # array([15, 43, 169]) — H, S, V
+
+# See the actual mask bounds that will be applied
+lower, upper = generate_color_range(
+    "#A98876",
+    hue_offset=10,
+    saturation_offset=50,
+    value_offset=50,
+)
+print(lower)  # [ 5,  0, 119]
+print(upper)  # [25, 93, 219]
+```
+
+The `generate_color_range` function clips all values to valid HSV ranges (H: 0–179, S/V: 0–255):
+
+```python
+def generate_color_range(
+    hex_color: str,
+    hue_offset: int = 10,
+    saturation_offset: int = 50,
+    value_offset: int = 50,
+) -> tuple[NDArray[np.uint8], NDArray[np.uint8]]:
+    base_hsv = hex_to_hsv(hex_color)
+
+    lower_bound = np.array(
+        [
+            max(0, int(base_hsv[0]) - hue_offset),
+            max(0, int(base_hsv[1]) - saturation_offset),
+            max(0, int(base_hsv[2]) - value_offset),
+        ],
+        dtype=np.uint8,
+    )
+
+    upper_bound = np.array(
+        [
+            min(179, int(base_hsv[0]) + hue_offset),
+            min(255, int(base_hsv[1]) + saturation_offset),
+            min(255, int(base_hsv[2]) + value_offset),
+        ],
+        dtype=np.uint8,
+    )
+
+    return lower_bound, upper_bound
+```
+
+<Tip>
+  Use a color picker on a representative region of your images to get the hex value, then pass it to `hex_to_hsv()` to verify the HSV center before running a full detection pass.
+</Tip>
+
+---
+
+## Detection parameters
+
+### `target_color` (default: `"#A98876"`)
+
+Hex code of the color you want to isolate. The default is a warm terracotta representative of ceramic fragments.
+
+### `hue_offset` (default: `10`, range: 0–90)
+
+Expands the mask ±offset around the base hue. A value of `10` captures about an 11° band either side of the target hue. Increase it for naturally varying surfaces; decrease it when two artifact classes have similar colors.
+
+### `saturation_offset` (default: `50`, range: 0–127)
+
+Expands the mask up and down the saturation axis. Higher values capture both washed-out and vivid instances of the color.
+
+### `value_offset` (default: `50`, range: 0–127)
+
+Expands the mask along the brightness axis. Raise it to handle shadows and highlights on 3-D objects.
+
+### `min_area` and `max_area` (defaults: `50` / `5000`, units: pixels²)
+
+Contours outside this range are discarded after masking. `filter_contours` implements the check:
+
+```python
+def filter_contours(
+    contours: list[NDArray[Any]],
+    min_area: int = 50,
+    max_area: int = 5000,
+) -> list[NDArray[Any]]:
+    filtered: list[NDArray[Any]] = []
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if min_area <= area <= max_area:
+            filtered.append(contour)
+    return filtered
+```
+
+<Note>
+  Area values are in **pixel²** relative to the resolution of the input image. If you resize images before processing, scale these thresholds accordingly.
+</Note>
+
+---
+
+## How morphological operations affect results
+
+Two operations are applied to the mask in sequence, both using the `kernel_size` (default `(5, 5)`):
+
+| Operation | OpenCV call | Effect |
+|-----------|------------|--------|
+| `MORPH_CLOSE` | `cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)` | Fills small dark holes inside bright regions — useful for artifacts with surface texture |
+| `MORPH_OPEN` | `cv2.morphologyEx(mask_closed, cv2.MORPH_OPEN, kernel)` | Removes small isolated bright specks — reduces detection of soil grains or dust |
+
+**Larger kernels** smooth more aggressively: they merge nearby fragments and eliminate fine noise. **Smaller kernels** preserve detail but may produce fragmented contours around a single artifact.
+
+<Warning>
+  Setting `kernel_size` to `(1, 1)` effectively disables morphological cleaning. Only do this if your images have very clean, uniform backgrounds.
+</Warning>
+
+---
+
+## Tips for different artifact types
+
+<AccordionGroup>
+  <Accordion title="Ceramics and pottery">
+    Ceramics typically have a warm, muted hue (terracotta to buff). Start with `hue_offset=10`, `saturation_offset=50`. Use moderate `min_area` (50–200 px²) if photographing sherds close-up; increase to 200–500 px² for wide-angle field shots to filter soil pebbles.
+
+    ```bash
+    uv run archeo-cluster detect -i ./ceramics --color "#A98876" --min-area 100 --max-area 8000
+    ```
+  </Accordion>
+
+  <Accordion title="Stone artifacts">
+    Flint, obsidian, and limestone have low saturation. Increase `saturation_offset` to 80–100 so the mask captures grayish tones. Widen `value_offset` to 60–70 to handle the wide brightness range of stone surfaces.
+
+    ```bash
+    uv run archeo-cluster detect -i ./lithics --color "#8C8880" --min-area 200 --max-area 15000
+    ```
+  </Accordion>
+
+  <Accordion title="Bone fragments">
+    Bone tends toward pale yellow or cream. Use `hue_offset=15` to catch the natural yellowing variation. Bone fragments can be large, so raise `max_area` to 20 000 px² or higher depending on image resolution.
+
+    ```bash
+    uv run archeo-cluster detect -i ./bone --color "#D4C5A9" --min-area 150 --max-area 20000
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Feature extraction
+
+For every contour that survives the area filter, `extract_features` computes eight geometric properties:
+
+```python
+def extract_features(contour: NDArray[np.int32]) -> ContourFeatures:
+    area = cv2.contourArea(contour)
+    perimeter = cv2.arcLength(contour, closed=True)
+
+    moments = cv2.moments(contour)
+    if moments["m00"] != 0:
+        cx = int(moments["m10"] / moments["m00"])
+        cy = int(moments["m01"] / moments["m00"])
+    else:
+        cx, cy = 0, 0
+
+    x, y, width, height = cv2.boundingRect(contour)
+    bounding_rect_area = width * height
+
+    hull = cv2.convexHull(contour)
+    hull_area = cv2.contourArea(hull)
+
+    circularity = 0.0
+    if perimeter > 0:
+        circularity = (4 * np.pi * area) / (perimeter**2)
+
+    aspect_ratio = 0.0
+    if height > 0:
+        aspect_ratio = width / height
+
+    solidity = 0.0
+    if hull_area > 0:
+        solidity = area / hull_area
+
+    extent = 0.0
+    if bounding_rect_area > 0:
+        extent = area / bounding_rect_area
+
+    return ContourFeatures(
+        area=area,
+        perimeter=perimeter,
+        centroid_x=cx,
+        centroid_y=cy,
+        circularity=circularity,
+        aspect_ratio=aspect_ratio,
+        solidity=solidity,
+        extent=extent,
+    )
+```
+
+| Feature | Formula | Interpretation |
+|---------|---------|----------------|
+| `area` | `cv2.contourArea` | Pixel² size of detected object |
+| `perimeter` | `cv2.arcLength(..., closed=True)` | Boundary length in pixels |
+| `centroid_x`, `centroid_y` | Image moments `m10/m00`, `m01/m00` | Spatial position (used for spatial analysis, not clustering) |
+| `circularity` | `4π·area / perimeter²` | 1.0 = perfect circle; lower = more irregular |
+| `aspect_ratio` | `width / height` | Elongation of the bounding rectangle |
+| `solidity` | `area / convex_hull_area` | 1.0 = fully convex; lower = concave or fragmented |
+| `extent` | `area / bounding_rect_area` | Ratio of object to its bounding box |
+
+These six morphological features (`area`, `perimeter`, `circularity`, `aspect_ratio`, `solidity`, `extent`) are the ones used for K-Means clustering in the next stage.

@@ -1,0 +1,63 @@
+---
+title: "analyze"
+description: "Run spatial analysis on clustered data to identify distribution patterns."
+---
+
+The `analyze` command reads a `_clustered.csv` file produced by `cluster` and computes the Average Nearest Neighbor (ANN) index for each cluster to characterize how the detected objects are spatially distributed.
+
+## Syntax
+
+```bash
+./run-cli analyze --input <path> [options]
+```
+
+## Options
+
+<ParamField path="--input" type="string" required>
+  Path to the clustered CSV file produced by the `cluster` command. Short alias: `-i`.
+
+  This file must contain a `cluster` column in addition to the feature columns.
+</ParamField>
+
+<ParamField path="--output-dir" type="string" default="<input parent>/analysis">
+  Directory where output plots and statistics are written. Short alias: `-o`.
+
+  Defaults to an `analysis/` subdirectory next to the input CSV file.
+</ParamField>
+
+## ANN index explained
+
+The Average Nearest Neighbor (ANN) index is the ratio of the observed mean nearest-neighbor distance to the expected mean distance under a random distribution:
+
+| R-index value | Interpretation |
+|---------------|----------------|
+| R < 1 | Clustered — objects are closer together than expected by chance |
+| R ≈ 1 | Random — no significant spatial pattern |
+| R > 1 | Dispersed — objects are more spread out than expected by chance |
+
+The index is computed independently for each cluster group, so you can compare spatial patterns across different artifact types in the same image.
+
+## Output files
+
+```
+<output-dir>/
+├── descriptive_stats.csv    ← mean, std, min, max per cluster
+├── ann_results.csv          ← R-index and interpretation per cluster
+└── ann_plot.png             ← spatial scatter with ANN overlay
+```
+
+## Examples
+
+```bash
+# Analyze a single clustered CSV with defaults
+./run-cli analyze -i ./results/clusters/site_a/site_a_clustered.csv
+
+# Write plots to a specific directory
+./run-cli analyze \
+  -i ./results/clusters/site_a/site_a_clustered.csv \
+  -o ./results/analysis/site_a
+```
+
+<Note>
+  When using the `pipeline` command, spatial analysis runs automatically on all images and writes results to the `analysis/` subdirectory of the session. Use `analyze` directly only when you need to rerun this stage on existing clustered data.
+</Note>

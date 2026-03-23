@@ -1,0 +1,67 @@
+---
+title: "Introduction"
+description: "Learn what Archeo-Cluster is and how it can help with archaeological image analysis."
+---
+
+Archeo-Cluster is a Python CLI tool and library for analyzing archaeological images. It uses OpenCV for color-based object detection and K-Means clustering for artifact classification, combining computer vision with spatial statistics to extract quantitative data from archaeological photographs.
+
+The tool was developed as part of thesis research on archaeological image analysis at the Universidad de San Carlos de Guatemala (USAC), and is designed to reduce manual annotation effort when processing large image collections from excavation sites.
+
+## The three-stage pipeline
+
+Archeo-Cluster processes images through three sequential stages:
+
+<Steps>
+  <Step title="Detection">
+    Images are converted to HSV color space and color-based thresholding isolates artifact regions matching a target color (such as ceramic fragments). Morphological operations clean noise and fill gaps. OpenCV `findContours` identifies object boundaries and extracts geometric features: area, perimeter, centroid, circularity, and aspect ratio. Results are saved to `features.csv`.
+  </Step>
+  <Step title="Clustering">
+    Extracted features are normalized and fed into K-Means clustering. The elbow method automatically determines the optimal number of clusters (K) by analyzing within-cluster sum of squares (WCSS) — no manual tuning required. Each artifact is assigned to a cluster based on feature similarity. Results are saved to `clustered.csv` along with scatter plots and an elbow curve.
+  </Step>
+  <Step title="Spatial analysis">
+    The Average Nearest Neighbor (ANN) index calculates the ratio of observed vs. expected mean nearest-neighbor distances across artifact centroids. ANN < 1 indicates clustering, ANN > 1 indicates dispersion, and ANN ≈ 1 indicates random distribution. Results export as GeoJSON for use in QGIS and other GIS tools.
+  </Step>
+</Steps>
+
+## Who it's for
+
+Archeo-Cluster is built for:
+
+- **Archaeologists** who need to classify artifacts from excavation photographs without manual annotation
+- **Researchers** applying computer vision and machine learning to archaeological datasets
+- **GIS analysts** who want artifact distribution data in formats compatible with QGIS
+- **Developers** integrating artifact analysis into larger research pipelines via the Python API
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Color segmentation" icon="palette">
+    HSV-based segmentation isolates artifacts by color. Configure the target color with any hex value (e.g., `#A98876`) to match ceramic fragments, stone tools, or other materials.
+  </Card>
+  <Card title="K-Means clustering" icon="chart-scatter">
+    Automatic artifact grouping using K-Means with the elbow method for optimal K selection. Generates cluster scatter plots and WCSS elbow curves.
+  </Card>
+  <Card title="ANN spatial analysis" icon="map-pin">
+    Average Nearest Neighbor (ANN) index quantifies whether artifacts cluster, disperse, or distribute randomly across an excavation area.
+  </Card>
+  <Card title="GeoJSON export" icon="file-export">
+    Results export as GeoJSON for direct import into QGIS and other GIS tools for further spatial analysis and visualization.
+  </Card>
+  <Card title="Session management" icon="folder-open">
+    Each analysis run is stored in a named session directory. Revisit, compare, and manage previous results without re-running the pipeline.
+  </Card>
+  <Card title="Python API" icon="code">
+    Every CLI command has a corresponding Python class. Use `ObjectDetector`, `KMeansAnalyzer`, and spatial analysis functions directly in your scripts.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install Archeo-Cluster using `uv` and verify your environment is ready.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first full analysis pipeline from clone to results in minutes.
+  </Card>
+</CardGroup>

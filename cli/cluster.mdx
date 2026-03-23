@@ -1,0 +1,71 @@
+---
+title: "cluster"
+description: "Perform K-Means clustering on features extracted from detected objects."
+---
+
+The `cluster` command reads a `features.csv` produced by `detect`, groups the detected objects into clusters using K-Means, and automatically selects the optimal number of clusters with the elbow method.
+
+## Syntax
+
+```bash
+./run-cli cluster --input <path> [options]
+```
+
+## Options
+
+<ParamField path="--input" type="string" required>
+  Path to the `features.csv` file produced by the `detect` command. Short alias: `-i`.
+</ParamField>
+
+<ParamField path="--output-dir" type="string" default="<input parent>/clusters">
+  Directory where clustering results are written. Short alias: `-o`.
+
+  Defaults to a `clusters/` subdirectory next to the input CSV file.
+</ParamField>
+
+<ParamField path="--images-dir" type="string">
+  Directory containing the processed (annotated) images from the detection step. When provided, the command overlays cluster assignments on the detection images to produce cluster visualizations.
+</ParamField>
+
+<ParamField path="--max-k" type="number" default="10">
+  Maximum number of clusters to evaluate when running the elbow method. The algorithm tests K values from 1 to this number and selects the K at the elbow of the WCSS curve.
+</ParamField>
+
+## Output files
+
+For each image represented in the input CSV, the command creates a subdirectory under `--output-dir`:
+
+```
+<output-dir>/
+└── <image-name>/
+    ├── <image-name>_clustered.csv   ← features with cluster assignment column
+    ├── elbow_plot.png               ← WCSS vs K curve
+    └── cluster_scatter.png          ← 2-D scatter of cluster assignments
+```
+
+<Note>
+  The `<image-name>_clustered.csv` file is the required input for the `analyze` command.
+</Note>
+
+## Examples
+
+```bash
+# Cluster using defaults — output written next to features.csv
+./run-cli cluster -i ./results/features.csv
+
+# Specify an output directory explicitly
+./run-cli cluster -i ./results/features.csv -o ./results/clusters
+
+# Include detection images for cluster overlays
+./run-cli cluster \
+  -i ./results/features.csv \
+  --images-dir ./results/detection \
+  -o ./results/clusters
+
+# Increase the maximum K for large, complex datasets
+./run-cli cluster -i ./results/features.csv --max-k 20
+```
+
+<Tip>
+  If you used `pipeline` or the session-aware `detect` command, the session directory already contains `features.csv` at the expected path. Use `archeo-cluster sessions --latest` to get the session path quickly.
+</Tip>

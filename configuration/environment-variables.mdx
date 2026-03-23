@@ -1,0 +1,149 @@
+---
+title: "Environment Variables"
+description: "Configure Archeo-Cluster using environment variables."
+---
+
+Archeo-Cluster reads a set of `ARCHEO_*` environment variables when no YAML config file is found. This makes it straightforward to configure the tool in containerized environments, CI pipelines, or any context where writing a config file is inconvenient.
+
+<Note>
+Environment variables are only applied when **no YAML config file is discovered** during the directory traversal. If a `config.yaml` (or equivalent) is found, it takes full precedence and environment variables are not read.
+</Note>
+
+## Available environment variables
+
+### Detection
+
+<ParamField path="ARCHEO_TARGET_COLOR" type="string">
+  Hex color code of the target object to detect. Maps to `detection.target_color`.
+
+  **Default:** `#A98876`
+
+  ```bash
+  export ARCHEO_TARGET_COLOR="#8B6347"
+  ```
+</ParamField>
+
+<ParamField path="ARCHEO_MIN_AREA" type="integer">
+  Minimum contour area in pixels. Objects smaller than this value are discarded. Maps to `detection.min_area`.
+
+  **Default:** `50` — must be ≥ 1
+
+  ```bash
+  export ARCHEO_MIN_AREA=100
+  ```
+</ParamField>
+
+<ParamField path="ARCHEO_MAX_AREA" type="integer">
+  Maximum contour area in pixels. Objects larger than this value are discarded. Maps to `detection.max_area`.
+
+  **Default:** `5000` — must be ≥ 1
+
+  ```bash
+  export ARCHEO_MAX_AREA=8000
+  ```
+</ParamField>
+
+### Clustering
+
+<ParamField path="ARCHEO_MAX_K" type="integer">
+  Maximum number of clusters (K) evaluated by the elbow method. Maps to `clustering.max_k`.
+
+  **Default:** `10` — range: 2–50
+
+  ```bash
+  export ARCHEO_MAX_K=15
+  ```
+</ParamField>
+
+### Paths
+
+<ParamField path="ARCHEO_DATA_DIR" type="string">
+  Path to the base directory for input data. Maps to `paths.data_dir`.
+
+  **Default:** `./data`
+
+  ```bash
+  export ARCHEO_DATA_DIR=/mnt/datasets/archaeological
+  ```
+</ParamField>
+
+<ParamField path="ARCHEO_RESULTS_DIR" type="string">
+  Path to the directory where results are written. Maps to `paths.results_dir`.
+
+  **Default:** `./results`
+
+  ```bash
+  export ARCHEO_RESULTS_DIR=/mnt/output/results
+  ```
+</ParamField>
+
+### Application
+
+<ParamField path="ARCHEO_DEBUG" type="string">
+  Enable debug mode. Accepts `true`, `1`, or `yes` (case-insensitive) to enable; any other value leaves debug mode off. Maps to `debug`.
+
+  **Default:** `false`
+
+  ```bash
+  export ARCHEO_DEBUG=true
+  ```
+</ParamField>
+
+<ParamField path="ARCHEO_LOG_LEVEL" type="string">
+  Logging verbosity level. The value is uppercased automatically. Maps to `log_level`.
+
+  **Default:** `INFO` — accepted values: `DEBUG`, `INFO`, `WARNING`, `ERROR`
+
+  ```bash
+  export ARCHEO_LOG_LEVEL=DEBUG
+  ```
+</ParamField>
+
+## Mapping to config fields
+
+The table below summarizes the full mapping between environment variables and their corresponding YAML config fields.
+
+| Environment variable | Config field | Type |
+|---|---|---|
+| `ARCHEO_TARGET_COLOR` | `detection.target_color` | string |
+| `ARCHEO_MIN_AREA` | `detection.min_area` | integer |
+| `ARCHEO_MAX_AREA` | `detection.max_area` | integer |
+| `ARCHEO_MAX_K` | `clustering.max_k` | integer |
+| `ARCHEO_DATA_DIR` | `paths.data_dir` | path |
+| `ARCHEO_RESULTS_DIR` | `paths.results_dir` | path |
+| `ARCHEO_DEBUG` | `debug` | boolean |
+| `ARCHEO_LOG_LEVEL` | `log_level` | string |
+
+## Example: CI pipeline
+
+The following shell block shows a typical CI configuration that sets all relevant variables before running the pipeline:
+
+```bash
+export ARCHEO_TARGET_COLOR="#A98876"
+export ARCHEO_MIN_AREA=50
+export ARCHEO_MAX_AREA=5000
+export ARCHEO_MAX_K=10
+export ARCHEO_DATA_DIR=/ci/workspace/images
+export ARCHEO_RESULTS_DIR=/ci/workspace/output
+export ARCHEO_LOG_LEVEL=INFO
+export ARCHEO_DEBUG=false
+
+archeo-cluster pipeline --input-dir "$ARCHEO_DATA_DIR"
+```
+
+## Limitations
+
+Not every config field is exposed as an environment variable. The following fields can only be set via `config.yaml` or the Python API:
+
+- `detection.kernel_size`
+- `detection.hue_offset`
+- `detection.saturation_offset`
+- `detection.value_offset`
+- `clustering.random_state`
+- `clustering.min_samples_per_cluster`
+- `clustering.compute_silhouette`
+- `paths.plots_dir`
+
+<Tip>
+If you need to control these fields in a headless environment, generate a `config.yaml` programmatically before running the tool, or commit a base config file to your repository.
+</Tip>
